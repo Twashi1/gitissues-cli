@@ -1,6 +1,9 @@
 #include <gitissues/umbra_string.h>
+#include <stdio.h>
 
 bool compare(struct UmbraString const a, struct UmbraString const b) {
+    printf("Comparing strings\n");
+
     // Compare prefix first
     if (LIKELY(a.prefix != b.prefix)) {
         return false;
@@ -32,28 +35,54 @@ bool compare(struct UmbraString const a, struct UmbraString const b) {
     return true;
 }
 
-void setModifiableString(struct UmbraString* s, char const* value) {
+bool _attemptInplaceConstruction(struct UmbraString* s, char const* value) {
     // Do it with 2-pass
-    uint32_t size = (uint32_t)strlen(value);
-    s->size = size;
+    s->size = (uint32_t)strlen(value);
     s->prefix = 0;
     s->data = 0;
 
-    for (uint32_t i = 0; i < 4 && i < size; i++) {
+    // Always build the prefix
+    for (uint32_t i = 0; i < 4 && i < s->size; i++) {
         s->prefix |= (uint32_t)value[i] << (8 * i);
     }
 
-    if (size <= 12) {
-        for (uint32_t i = 0; i < size - 4; i++) {
-            s->data |= (uint64_t)value[i + 4] << (8 * i);
-        }
+    // Failed in-place construction
+    if (s->size > 12)
+        return false;
 
-        return;
+    // Construct in-place
+    for (uint32_t i = 0; i < s->size - 4; i++) {
+        s->data |= (uint64_t)value[i + 4] << (8 * i);
     }
+
+    return true;
+}
+
+void setModifiableString(struct UmbraString* s, char const* value,
+                         struct BlockAllocator* allocator) {
+    if (_attemptInplaceConstruction(s, value))
+        return;
+
+    // Allocate larger block for string
+    void* memory = allocateBlockAllocator(allocator, s->size, alignof(char));
+
+    // TODO: return fail code?
+    if (memory == NULL)
+        return;
+
+    // Note we don't include the \0 terminator
+    memcpy(memory, value, s->size);
+    s->ptr = memory;
 
     return;
 }
 
 void setImmutableString(struct UmbraString* s, char const* value) {
+    if (_attemptInplaceConstruction(s, value))
+        return;
+
+    // If larger, just copy the actual pointer, we have guarantee on the lifetime
+    s->ptr = value;
+
     return;
 }

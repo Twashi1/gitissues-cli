@@ -31,6 +31,7 @@ bool _fitBlockAllocator(struct BlockAllocator* allocator, uint32_t numArenas);
 
 struct BlockAllocator createBlockAllocator(uint32_t blockSize);
 void dropBlockAllocator(struct BlockAllocator* allocator);
-void* allocateBlock(struct BlockAllocator* allocator, uint32_t allocationSize, uint32_t alignment);
+void* allocateBlockAllocator(struct BlockAllocator* allocator, uint32_t allocationSize,
+                             uint32_t alignment);
 
 #endif

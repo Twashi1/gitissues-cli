@@ -1,6 +1,7 @@
 #ifndef _GITISSUES_UMBRA_STRING_H_
 #define _GITISSUES_UMBRA_STRING_H_
 
+#include <gitissues/allocator.h>
 #include <gitissues/defines.h>
 #include <stdalign.h>
 #include <stdbool.h>
@@ -29,8 +30,12 @@ _Static_assert(sizeof(const char*) == alignof(const char*), "unexpected pointer 
 _Static_assert(alignof(struct UmbraString) == 8 || alignof(struct UmbraString) == 4,
                "unexpected platform alignment");
 
+// TODO: evaluate whether or not we need such an optimized string construct; consider
+// that modifiable string performance is poor if we need to make frequent changes
 bool compare(struct UmbraString const a, struct UmbraString const b);
-void setModifiableString(struct UmbraString* s, char const* value);
+bool _attemptInplaceConstruction(struct UmbraString* s, char const* value);
+void setModifiableString(struct UmbraString* s, char const* value,
+                         struct BlockAllocator* allocator);
 void setImmutableString(struct UmbraString* s, char const* value);
 
 #endif

@@ -57,27 +57,24 @@ bool _fitBlockAllocator(struct BlockAllocator* allocator, uint32_t numArenas) {
         return true;
     }
 
+    // TODO: abstract into macro everywhere, too buggy
     uint32_t growSize = allocator->capacityArenas + (allocator->capacityArenas >> 1);
-    uint32_t newSize = numArenas > growSize ? numArenas : growSize;
+    uint32_t newSize = numArenas > growSize ? numArenas + 1 : growSize;
 
-    if (allocator->arenas == NULL) {
-        allocator->arenas = malloc(sizeof(struct Arena) * newSize);
-    } else {
-        void* tmp = realloc(allocator->arenas, sizeof(struct Arena) * newSize);
-
-        allocator->arenas = tmp;
-    }
-
-    allocator->capacityArenas = newSize;
+    void* p = realloc(allocator->arenas, sizeof(struct Arena) * newSize);
+    allocator->arenas = p;
 
     if (allocator->arenas == NULL) {
         return false;
     }
 
+    allocator->capacityArenas = newSize;
+
     return true;
 }
 
-void* allocateBlock(struct BlockAllocator* allocator, uint32_t allocationSize, uint32_t alignment) {
+void* allocateBlockAllocator(struct BlockAllocator* allocator, uint32_t allocationSize,
+                             uint32_t alignment) {
     // Go to front block
     struct Arena* front = &allocator->arenas[allocator->numArenas - 1];
     void* p = allocateArena(front, allocationSize, alignment);
