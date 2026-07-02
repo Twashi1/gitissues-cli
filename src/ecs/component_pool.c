@@ -1,7 +1,7 @@
 #include <gitissues/ecs/component_pool.h>
 #include <gitissues/ecs/paged_array.h>
 #include <gitissues/errs.h>
-#include <stdio.h>
+#include <gitissues/log.h>
 
 struct ComponentPool createManagedComponentPool(uint32_t sizeOfType,
                                                 struct ComponentManager manager) {
@@ -17,6 +17,8 @@ struct ComponentPool createComponentPool(uint32_t sizeOfType) {
     pool.manager.delete = NULL;
     pool.manager.move = NULL;
     pool.manager.swapRemove = NULL;
+    pool.manager.save = NULL;
+    pool.manager.load = NULL;
     pool.sparse = createSparseArray();
 
     return pool;
@@ -68,13 +70,11 @@ enum ErrorCode addEntityToComponentPool(struct ComponentPool* pool, Entity entit
     if (ec != GITISSUES_OK)
         return ec;
 
-    printf("Added entity, index %d to sparse array\n", entityIndex);
+    GITISSUES_LOG_DEBUG("Added entity, index %d to sparse array\n", entityIndex);
 
     ec = reserveComponentPool(pool, entityIndex);
     if (ec != GITISSUES_OK)
         return ec;
-
-    printf("Reserved component pool space\n");
 
     pool->dense.entity[entityIndex] = entity;
 
@@ -82,7 +82,6 @@ enum ErrorCode addEntityToComponentPool(struct ComponentPool* pool, Entity entit
     if (pool->manager.move != NULL) {
         pool->manager.move(componentData, pool->dense.data + (entityIndex * pool->sizeOfType));
     } else {
-        printf("Byte-by-byte copying component data\n");
         memcpy(pool->dense.data + (entityIndex * pool->sizeOfType), componentData,
                pool->sizeOfType);
     }
@@ -170,4 +169,44 @@ uint8_t* getOrNullEntityComponentPool(struct ComponentPool* pool, Entity entity)
 
 bool hasEntityComponentPool(struct ComponentPool* pool, Entity entity) {
     return containsEntitySparseArray(&pool->sparse, entity);
+}
+
+void saveComponentPool(struct ComponentPool const* pool, FILE* p) {
+    saveSparseArray(&pool->sparse, p);
+    fwrite(&pool->sizeOfType, sizeof(pool->sizeOfType), 1, p);
+    // TODO: write dense
+    fwrite(&pool->dense.size, sizeof(pool->dense.size), 1, p);
+    fwrite(pool->dense.entity, sizeof(Entity), pool->dense.size, p);
+
+    if (pool->manager.save != NULL) {
+        for (uint32_t i = 0; i < pool->dense.size; i++) {
+            pool->manager.save(&pool->dense.data[i * pool->sizeOfType], p);
+        }
+    } else {
+        fwrite(pool->dense.data, sizeof(uint8_t) * pool->sizeOfType, pool->dense.size, p);
+    }
+}
+// TODO: need to pass in the component manager
+struct ComponentPool loadComponentPool(FILE* p) {
+    struct ComponentPool pool;
+    pool.manager.save = NULL;
+    pool.manager.load = NULL;
+    pool.manager.swapRemove = NULL;
+    pool.manager.delete = NULL;
+    pool.manager.move = NULL;
+    pool.sparse = loadSparseArray(p);
+
+    fread(&pool.sizeOfType, sizeof(pool.sizeOfType), 1, p);
+    fread(&pool.dense.size, sizeof(pool.dense.size), 1, p);
+    pool.dense.capacity = pool.dense.size;
+
+    pool.dense.entity = malloc(sizeof(Entity) * pool.dense.size);
+    DEBUG_ASSERT(pool.dense.entity != NULL, "Out of memory allocating dense entity");
+    pool.dense.data = malloc(sizeof(uint8_t) * pool.sizeOfType * pool.dense.size);
+    DEBUG_ASSERT(pool.dense.data != NULL, "Out of memory allocating dense components");
+
+    fread(pool.dense.entity, sizeof(Entity), pool.dense.size, p);
+    fread(pool.dense.data, sizeof(uint8_t) * pool.sizeOfType, pool.dense.size, p);
+
+    return pool;
 }

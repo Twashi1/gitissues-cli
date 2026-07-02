@@ -1,4 +1,5 @@
 #include <gitissues/umbra_string.h>
+#include <stddef.h>
 #include <stdio.h>
 
 bool compare(struct UmbraString const a, struct UmbraString const b) {
@@ -85,4 +86,36 @@ void setImmutableString(struct UmbraString* s, char const* value) {
     s->ptr = value;
 
     return;
+}
+
+void saveUmbraString(struct UmbraString const* s, FILE* p) {
+    // TODO: note works of the assumption that size appears first at offset 0
+    // Assume value is stored in place, just write entire object trivially
+    fwrite(&s->size, sizeof(s->size), 1, p);
+    fwrite(&s->prefix, sizeof(s->prefix), 1, p);
+    if (s->size <= 12) {
+        fwrite(&s->data, sizeof(s->data), 1, p);
+        return;
+    }
+
+    // Write data stored at pointer
+    fwrite(s->ptr, sizeof(char), s->size, p);
+}
+
+struct UmbraString loadUmbraString(struct BlockAllocator* allocator, FILE* p) {
+    struct UmbraString string;
+    // Read in size
+    fread(&string.size, sizeof(string.size), 1, p);
+    fread(&string.prefix, sizeof(string.prefix), 1, p);
+
+    if (string.size <= 12) {
+        fread(&string.data, sizeof(string.data), 1, p);
+    } else {
+        string.ptr = allocateBlockAllocator(allocator, string.size * sizeof(char), alignof(char));
+        DEBUG_ASSERT(string.ptr != NULL, "Failed to allocate for umbra string");
+        // TODO: const cast here...
+        fread((void*)string.ptr, sizeof(char), string.size, p);
+    }
+
+    return string;
 }

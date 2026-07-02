@@ -12,3 +12,7 @@ SortIncludes: true
 IncludeBlocks: Regroup
 
 Cpp11BracedListStyle: true
+
+Diagnostics:
+  Suppress:
+    - string-plus-int

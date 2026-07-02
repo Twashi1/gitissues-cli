@@ -5,6 +5,7 @@
 #include <gitissues/ecs/entity.h>
 #include <gitissues/errs.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -36,5 +37,8 @@ enum ErrorCode addEntitySparseArray(struct SparseArray* array, Entity entity, ui
 enum ErrorCode releaseEntitySparseArray(struct SparseArray* array, Entity entity);
 void swapRemoveEntitySparseArray(struct SparseArray* array, Entity remove, Entity keep);
 void freeSparseArray(struct SparseArray* array);
+
+void saveSparseArray(struct SparseArray const* array, FILE* p);
+struct SparseArray loadSparseArray(FILE* p);
 
 #endif

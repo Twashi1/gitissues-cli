@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 struct UmbraString {
@@ -37,5 +38,8 @@ bool _attemptInplaceConstruction(struct UmbraString* s, char const* value);
 void setModifiableString(struct UmbraString* s, char const* value,
                          struct BlockAllocator* allocator);
 void setImmutableString(struct UmbraString* s, char const* value);
+
+void saveUmbraString(struct UmbraString const* s, FILE* p);
+struct UmbraString loadUmbraString(struct BlockAllocator* allocator, FILE* p);
 
 #endif

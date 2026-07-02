@@ -8,11 +8,15 @@
 typedef void (*ComponentMove)(uint8_t* src, uint8_t* dest);
 typedef void (*ComponentDelete)(uint8_t* src);
 typedef void (*ComponentSwapRemove)(uint8_t* toDelete, uint8_t* toKeep);
+typedef void (*ComponentSave)(uint8_t* src, FILE* p);
+typedef void (*ComponentLoad)(uint8_t* dest, FILE* p);
 
 struct ComponentManager {
     ComponentMove move;
     ComponentDelete delete;
     ComponentSwapRemove swapRemove;
+    ComponentSave save;
+    ComponentLoad load;
 };
 
 struct ComponentPool {
@@ -43,5 +47,9 @@ uint8_t* getEntityComponentPool(struct ComponentPool* pool, Entity entity);
 uint8_t* getOrNullEntityComponentPool(struct ComponentPool* pool, Entity entity);
 bool hasEntityComponentPool(struct ComponentPool* pool, Entity entity);
 void freeComponentPool(struct ComponentPool* pool);
+
+void saveComponentPool(struct ComponentPool const* pool, FILE* p);
+// TODO: need to make a function for loading with manager (abstract)
+struct ComponentPool loadComponentPool(FILE* p);
 
 #endif

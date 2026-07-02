@@ -21,6 +21,12 @@ add_executable(gitissues
     src/ecs/string_map.c
 )
 
+string(LENGTH "${CMAKE_SOURCE_DIR}" SOURCE_DIR_LENGTH)
+
+target_compile_definitions(gitissues PRIVATE
+  GITISSUES_SOURCE_DIR_LENGTH=${SOURCE_DIR_LENGTH}
+)
+
 target_include_directories(gitissues PUBLIC ${CMAKE_SOURCE_DIR}/include)
 # Link maths
 target_link_libraries(gitissues PRIVATE m)
