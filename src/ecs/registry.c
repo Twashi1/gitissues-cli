@@ -85,10 +85,10 @@ ComponentID getComponentID(struct Registry *registry,
 void addComponent(struct Registry *registry, Entity entity, ComponentID id,
                   uint8_t *data) {
   struct ComponentPool *pool = &registry->pools.data[id];
-  GITISSUES_LOG_DEBUG("Adding component id %d; ptr: %p to entity %d\n", id,
+  GITISSUES_LOG_DEBUG("Adding component id %d; ptr: %p to entity %d", id,
                       (void *)pool, entity);
   enum ErrorCode ec = addEntityToComponentPool(pool, entity, data);
-  DEBUG_PRINT_ERROR("Add entity to component pool error: %s\n", ec);
+  DEBUG_PRINT_ERROR("Add entity to component pool error: %s", ec);
   DEBUG_ASSERT(ec == GITISSUES_OK, "Adding entity to component pool failed");
 }
 
@@ -121,21 +121,6 @@ struct ComponentPool const *getPool(struct Registry *registry, ComponentID id) {
 }
 
 void saveRegistry(struct Registry const *registry, FILE *p) {
-  // struct {
-  //   Entity *data;
-  //   uint32_t size;
-  //   uint32_t capacity;
-  // } createdEntities;
-  //
-  // Entity nextEntity;
-  // uint32_t availableEntities;
-  //
-  // struct StringMap componentIDMap;
-  // struct {
-  //   struct ComponentPool *data;
-  //   uint32_t size;
-  //   uint32_t capacity;
-  // } pools;
   fwrite(&registry->createdEntities.size,
          sizeof(registry->createdEntities.size), 1, p);
   fwrite(registry->createdEntities.data, sizeof(Entity),
@@ -156,7 +141,7 @@ void saveRegistry(struct Registry const *registry, FILE *p) {
 }
 
 struct Registry loadRegistry(FILE *p) {
-  struct Registry registry;
+  struct Registry registry = {0};
 
   fread(&registry.createdEntities.size, sizeof(registry.createdEntities.size),
         1, p);

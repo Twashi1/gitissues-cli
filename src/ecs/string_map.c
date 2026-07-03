@@ -73,6 +73,7 @@ enum ErrorCode reserveStringMap(struct StringMap *map, uint32_t minCapacity) {
   map->capacity = newMap.capacity;
   map->dense.data = newMap.dense.data;
   map->dense.capacity = newMap.dense.capacity;
+  map->threshold = newMap.threshold;
 
   return GITISSUES_OK;
 }
@@ -107,17 +108,17 @@ enum ErrorCode _insertUncheckedStringMap(struct StringMap *map,
       map->data[index].value = value;
       ++map->size;
 
+      // Insert into dense
+      map->dense.data[map->dense.size].string = string;
+      map->dense.data[map->dense.size].stringHash = hash;
+      map->dense.data[map->dense.size].value = value;
+      ++map->dense.size;
+
       return GITISSUES_OK;
     }
 
     index = (index + 1) % map->capacity;
   } while (steps++ < map->capacity);
-
-  // Insert into dense
-  map->dense.data[map->dense.size].string = string;
-  map->dense.data[map->dense.size].stringHash = hash;
-  map->dense.data[map->dense.size].value = value;
-  ++map->dense.size;
 
   return GITISSUES_STRING_MAP_INSERTION_FAIL;
 }
@@ -141,7 +142,6 @@ ComponentID getStringMap(struct StringMap *map, struct UmbraString string) {
       // collisions)
       // TODO: if profiling concern, switch to the above assumption
       if (compare(map->data[index].string, string)) {
-        GITISSUES_LOG_DEBUG("Compared strings, returning index");
         return map->data[index].value;
       }
     }

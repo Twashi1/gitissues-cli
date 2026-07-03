@@ -1,5 +1,4 @@
 #include <gitissues/ecs/registry.h>
-#include <gitissues/tests/test.h>
 #include <gitissues/umbra_string.h>
 #include <stdio.h>
 
@@ -74,14 +73,6 @@ void testRegistry(void) {
     printf("%d: %s\n", i, buf);
   }
 
-  // FILE *p = fopen("fizzbuzz_registry.data", "wb");
-  // DEBUG_ASSERT(p != NULL, "Failed to open file registry");
-  //
-  // saveRegistry(&reg, p);
-  // struct Registry reg2 = loadRegistry(p);
-  //
-  // fclose(p);
-
   free(e);
   freeRegistry(&reg);
 }
@@ -92,19 +83,6 @@ int main(int argc, char **argv) {
   }
 
   printf("Hello, CMake C project\n");
-
-  struct Suite suite = createSuite("Testing test suite");
-  pushHeader(&suite, "First header");
-  pushTest(&suite, "Test 1: checking a == b");
-  testPassed(&suite, "None");
-  pushTest(&suite, "Test 2: a != b");
-  testFailed(&suite, "Not equal");
-  pushTest(&suite, "Test 3: a and b are same");
-  pushTest(&suite, "Subtest: a and b are equal");
-  testFailed(&suite, "Subtest failure");
-  testPassed(&suite, "Supertest passed");
-  popHeader(&suite);
-  freeSuite(&suite);
 
   // testRegistry();
 

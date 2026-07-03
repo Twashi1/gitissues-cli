@@ -1,7 +1,6 @@
 #ifndef _GITISSUES_TESTS_TEST_H_
 #define _GITISSUES_TESTS_TEST_H_
 
-#include <gitissues/log.h>
 #include <stdint.h>
 
 struct Header {
@@ -35,5 +34,14 @@ void testPassed(struct Suite *suite, char const *message);
 
 void pushHeader(struct Suite *suite, char const *name);
 void popHeader(struct Suite *suite);
+
+#define TEST_PASS_CONDITION(suite, condition)                                  \
+  do {                                                                         \
+    if (!!(condition)) {                                                       \
+      testPassed((suite), #condition);                                         \
+    } else {                                                                   \
+      testFailed((suite), #condition);                                         \
+    }                                                                          \
+  } while (0)
 
 #endif

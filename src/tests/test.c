@@ -1,4 +1,7 @@
+#include <gitissues/defines.h>
+#include <gitissues/tests/ecs.h>
 #include <gitissues/tests/test.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -120,4 +123,10 @@ void popHeader(struct Suite *suite) {
          header->numTests, percent);
 
   --suite->headers.size;
+}
+
+int main(void) {
+  testECS();
+
+  return 0;
 }
