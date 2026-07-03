@@ -19,6 +19,7 @@ add_executable(gitissues
     src/ecs/paged_array.c
     src/ecs/registry.c
     src/ecs/string_map.c
+    src/tests/test.c
 )
 
 string(LENGTH "${CMAKE_SOURCE_DIR}" SOURCE_DIR_LENGTH)

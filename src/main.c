@@ -1,88 +1,112 @@
 #include <gitissues/ecs/registry.h>
+#include <gitissues/tests/test.h>
+#include <gitissues/umbra_string.h>
 #include <stdio.h>
 
-#include "gitissues/umbra_string.h"
-
 void testRegistry(void) {
-    struct Registry reg = createRegistry();
+  struct Registry reg = createRegistry();
 
-    struct BlockAllocator allocator = createBlockAllocator(4096);
+  struct BlockAllocator allocator = createBlockAllocator(4096);
 
-    // Track entities
-    Entity* e = malloc(sizeof(Entity) * 1000);
+  // Track entities
+  Entity *e = malloc(sizeof(Entity) * 1000);
 
-    struct UmbraString fizz;
-    setImmutableString(&fizz, "Fizz");
-    struct UmbraString buzz;
-    setModifiableString(&buzz, "Buzz", &allocator);
+  struct UmbraString fizz;
+  setImmutableString(&fizz, "Fizz");
+  struct UmbraString buzz;
+  setModifiableString(&buzz, "Buzz", &allocator);
 
-    printf("Setup umbra strings\n");
+  printf("Setup umbra strings\n");
 
-    ComponentID id = registerComponentID(&reg, fizz, sizeof(int));
+  ComponentID id = registerComponentID(&reg, fizz, sizeof(int));
 
-    printf("Registered first componnet\n");
-    ComponentID id2 = registerComponentID(&reg, buzz, sizeof(float));
+  printf("Registered first componnet\n");
+  ComponentID id2 = registerComponentID(&reg, buzz, sizeof(float));
 
-    printf("Registered components: %d %d\n", id, id2);
+  printf("Registered components: %d %d\n", id, id2);
 
-    for (uint32_t i = 0; i < 1000; i++) {
-        e[i] = createEntity(&reg);
+  for (uint32_t i = 0; i < 1000; i++) {
+    e[i] = createEntity(&reg);
 
-        printf("Created entity: %d, value: %d\n", i, e[i]);
+    printf("Created entity: %d, value: %d\n", i, e[i]);
 
-        if (i % 3 == 0) {
-            ComponentID fizzID = getComponentID(&reg, fizz);
-            printf("Component ID Fizz: %d\n", fizzID);
-            int fizzValue = i;
-            addComponent(&reg, e[i], fizzID, (uint8_t*)&fizzValue);
-        }
-
-        if (i % 5 == 0) {
-            ComponentID buzzID = getComponentID(&reg, buzz);
-            printf("Component ID Buzz: %d\n", buzzID);
-            float buzzValue = i;
-            addComponent(&reg, e[i], buzzID, (uint8_t*)&buzzValue);
-        }
+    if (i % 3 == 0) {
+      ComponentID fizzID = getComponentID(&reg, fizz);
+      printf("Component ID Fizz: %d\n", fizzID);
+      int fizzValue = i;
+      addComponent(&reg, e[i], fizzID, (uint8_t *)&fizzValue);
     }
 
-    printf("Added all components\n");
+    if (i % 5 == 0) {
+      ComponentID buzzID = getComponentID(&reg, buzz);
+      printf("Component ID Buzz: %d\n", buzzID);
+      float buzzValue = i;
+      addComponent(&reg, e[i], buzzID, (uint8_t *)&buzzValue);
+    }
+  }
 
-    // Print FizzBuzz
-    for (uint32_t i = 0; i < 1000; i++) {
-        char buf[128] = {0};
+  printf("Added all components\n");
 
-        int* fizzPtr = (int*)getOrNullComponent(&reg, e[i], getComponentID(&reg, fizz));
-        float* buzzPtr = (float*)getOrNullComponent(&reg, e[i], getComponentID(&reg, buzz));
+  // Print FizzBuzz
+  for (uint32_t i = 0; i < 1000; i++) {
+    char buf[128] = {0};
 
-        int fizzValue = -1;
-        float buzzValue = -1.0f;
+    int *fizzPtr =
+        (int *)getOrNullComponent(&reg, e[i], getComponentID(&reg, fizz));
+    float *buzzPtr =
+        (float *)getOrNullComponent(&reg, e[i], getComponentID(&reg, buzz));
 
-        if (fizzPtr != NULL) {
-            strlcat(buf, "Fizz", sizeof(buf));
-            fizzValue = *fizzPtr;
-        }
+    int fizzValue = -1;
+    float buzzValue = -1.0f;
 
-        if (buzzPtr != NULL) {
-            strlcat(buf, "Buzz", sizeof(buf));
-            buzzValue = *buzzPtr;
-        }
-
-        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " [%d] [%f]", fizzValue, buzzValue);
-        printf("%d: %s\n", i, buf);
+    if (fizzPtr != NULL) {
+      strlcat(buf, "Fizz", sizeof(buf));
+      fizzValue = *fizzPtr;
     }
 
-    free(e);
-    freeRegistry(&reg);
+    if (buzzPtr != NULL) {
+      strlcat(buf, "Buzz", sizeof(buf));
+      buzzValue = *buzzPtr;
+    }
+
+    snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " [%d] [%f]",
+             fizzValue, buzzValue);
+    printf("%d: %s\n", i, buf);
+  }
+
+  // FILE *p = fopen("fizzbuzz_registry.data", "wb");
+  // DEBUG_ASSERT(p != NULL, "Failed to open file registry");
+  //
+  // saveRegistry(&reg, p);
+  // struct Registry reg2 = loadRegistry(p);
+  //
+  // fclose(p);
+
+  free(e);
+  freeRegistry(&reg);
 }
 
-int main(int argc, char** argv) {
-    if (argc > 1) {
-        printf("Argument: %s\n", argv[1]);
-    }
+int main(int argc, char **argv) {
+  if (argc > 1) {
+    printf("Argument: %s\n", argv[1]);
+  }
 
-    printf("Hello, CMake C project\n");
+  printf("Hello, CMake C project\n");
 
-    testRegistry();
+  struct Suite suite = createSuite("Testing test suite");
+  pushHeader(&suite, "First header");
+  pushTest(&suite, "Test 1: checking a == b");
+  testPassed(&suite, "None");
+  pushTest(&suite, "Test 2: a != b");
+  testFailed(&suite, "Not equal");
+  pushTest(&suite, "Test 3: a and b are same");
+  pushTest(&suite, "Subtest: a and b are equal");
+  testFailed(&suite, "Subtest failure");
+  testPassed(&suite, "Supertest passed");
+  popHeader(&suite);
+  freeSuite(&suite);
 
-    return 0;
+  // testRegistry();
+
+  return 0;
 }
