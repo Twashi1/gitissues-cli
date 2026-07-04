@@ -19,6 +19,8 @@ set(GITISSUES_SOURCES
     src/ecs/registry.c
     src/ecs/string_map.c
     src/tests/ecs.c
+    src/tests/json.c
+    src/json/json.c
 )
 
 add_library(gitissues_lib ${GITISSUES_SOURCES})

@@ -1,37 +1,43 @@
 #include <gitissues/issue.h>
 
-void _fitTagList(struct Issue* issue, uint32_t newCapacity) {
-    if (issue->tags.capacity >= newCapacity)
-        return;
+struct Issue createIssue(struct Registry *registry, char const *title) {
+  struct Issue issue = {0};
+  issue.entity = createEntity(registry);
+  issue.title = title;
 
-    uint32_t growSize = issue->tags.capacity + (issue->tags.capacity >> 1);
-    newCapacity = newCapacity >= growSize ? newCapacity : growSize;
-
-    void* p = realloc(issue->tags.data, sizeof(struct Tag) * newCapacity);
-    issue->tags.data = p;
-
-    if (issue->tags.data == NULL) {
-        return;
-    }
-
-    issue->tags.capacity = newCapacity;
+  return issue;
 }
 
-void attachTag(struct Issue* issue, struct Tag* tag) {
-    // Check tag with same name doesn't already exist
-    // TODO: could make this a hashmap
-    for (uint32_t i = 0; i < issue->tags.size; i++) {
-        struct Tag* existing = &issue->tags.data[i];
+void freeIssue(struct Registry *registry, struct Issue *issue) {
+  freeEntity(registry, issue->entity);
+  free(issue->tags.data);
+}
 
-        // Tag already existed; update value instead
-        if (compare(existing->name, tag->name)) {
-            *existing = *tag;
+ComponentID registerTag(struct Registry *registry, struct UmbraString const tag,
+                        uint32_t sizeOfType) {
+  return registerComponentID(registry, tag, sizeOfType);
+}
 
-            return;
-        }
-    }
+void addTagByName(struct Registry *registry, struct Issue *issue,
+                  struct UmbraString const tag, uint8_t *data) {
+  ComponentID id = getComponentID(registry, tag);
 
-    _fitTagList(issue, issue->tags.size + 1);
+  addTagById(registry, issue, id, data);
+}
+void addTagById(struct Registry *registry, struct Issue *issue, ComponentID id,
+                uint8_t *data) {
+  addComponent(registry, issue->entity, id, data);
 
-    issue->tags.data[issue->tags.size++] = *tag;
+  if (issue->tags.size >= issue->tags.capacity) {
+    uint32_t newCapacity =
+        issue->tags.capacity + (issue->tags.capacity >> 1) + 1;
+    void *p = realloc(issue->tags.data, sizeof(ComponentID) * newCapacity);
+    DEBUG_ASSERT(p != NULL, "Failed to allocate issue tags");
+    issue->tags.data = p;
+    issue->tags.capacity = newCapacity;
+  }
+
+  // TODO: maintaining this is annoying
+  // ideally, for add/removes, we make this a small dense map?
+  issue->tags.data[issue->tags.size++] = id;
 }

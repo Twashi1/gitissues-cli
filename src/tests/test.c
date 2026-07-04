@@ -1,5 +1,6 @@
 #include <gitissues/defines.h>
 #include <gitissues/tests/ecs.h>
+#include <gitissues/tests/json.h>
 #include <gitissues/tests/test.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -127,6 +128,7 @@ void popHeader(struct Suite *suite) {
 
 int main(void) {
   testECS();
+  testJson();
 
   return 0;
 }
