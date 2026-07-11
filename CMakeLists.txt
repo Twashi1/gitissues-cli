@@ -6,6 +6,8 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(BUILD_JNI "Build JNI bindings" OFF)
+
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 set(GITISSUES_SOURCES
@@ -24,7 +26,10 @@ set(GITISSUES_SOURCES
 )
 
 add_library(gitissues_lib ${GITISSUES_SOURCES})
+
+# Compile definition for skipping relative path when logging
 string(LENGTH "${CMAKE_SOURCE_DIR}" SOURCE_DIR_LENGTH)
+
 target_compile_definitions(gitissues_lib PUBLIC 
   GITISSUES_SOURCE_DIR_LENGTH=${SOURCE_DIR_LENGTH}
 )
@@ -34,13 +39,15 @@ target_compile_options(gitissues_lib PRIVATE
     -Wextra
     -Wpedantic
 )
+# Linking maths
 target_link_libraries(gitissues_lib PRIVATE m)
 
-add_executable(gitissues src/main.c )
+add_executable(gitissues src/main.c)
 target_link_libraries(gitissues PRIVATE gitissues_lib)
 
 add_executable(gitissues_tests src/tests/test.c)
 target_link_libraries(gitissues_tests PRIVATE gitissues_lib)
 
-
-
+if (BUILD_JNI)
+  add_subdirectory(jni)
+endif()

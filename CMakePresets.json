@@ -1,0 +1,54 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "BUILD_JNI": "OFF"
+      }
+    },
+    {
+      "name": "default",
+      "inherits": "base",
+      "displayName": "Default C build"
+    },
+    {
+      "name": "kotlin",
+      "inherits": "base",
+      "displayName": "C build with JNI bindings",
+      "cacheVariables": {
+        "BUILD_JNI": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "kotlin",
+      "configurePreset": "kotlin"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "kotlin",
+      "configurePreset": "kotlin"
+    }
+  ]
+}
