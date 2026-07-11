@@ -3,12 +3,13 @@
 ## Build
 
 ```sh
-mkdir build
-cd build
-cmake --preset kotlin .. # Build with JNI bindings (for kotlin/java support), or use --preset default
-cmake --build .
+# Build library/JNI bindings
+cmake --preset kotlin
+cmake --build --preset kotlin
+
+# Run Kotlin CLI
 cd kotlin
-cmake --build .
+./gradlew :cli:run --args="5 10"
 ```
 
 ## Description
