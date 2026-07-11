@@ -1,6 +1,34 @@
 find_package(JNI REQUIRED)
+find_package(Java REQUIRED COMPONENTS Development)
 
-add_library(gitissues_jni SHARED src/gitissues_jni.c)
+set(JNI_HEADER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(JNI_STUB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/java/gitissues/GitIssues.java)
+
+add_custom_command(
+  OUTPUT
+    ${JNI_HEADER_OUTPUT_DIR}/gitissues_GitIssues.h
+
+  COMMAND
+    ${CMAKE_COMMAND} -E make_directory
+    ${JNI_HEADER_OUTPUT_DIR}
+
+  COMMAND
+    ${Java_JAVAC_EXECUTABLE}
+    -h
+    ${JNI_HEADER_OUTPUT_DIR}
+    ${JNI_STUB_SOURCES}
+
+  DEPENDS
+    ${JNI_STUB_SOURCES}
+
+  COMMENT
+    "Generating JNI headers from Java stubs"
+)
+
+add_custom_target(generate_jni_headers DEPENDS ${JNI_HEADER_OUTPUT_DIR}/gitissues_GitIssues.h)
+
+add_library(gitissues_jni SHARED src/gitissues_jni.c ${JNI_HEADER_OUTPUT_DIR}/gitissues_GitIssues.h)
+add_dependencies(gitissues_jni generate_jni_headers)
 
 target_include_directories(gitissues_jni
     PRIVATE
@@ -10,4 +38,3 @@ target_include_directories(gitissues_jni
 )
 
 target_link_libraries(gitissues_jni PRIVATE gitissues_lib ${JNI_LIBRARIES})
-
