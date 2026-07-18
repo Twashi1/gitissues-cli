@@ -5,5 +5,5 @@
  * Learn more about Gradle by exploring our Samples at https://docs.gradle.org/8.14.4/samples
  */
 plugins {
-    kotlin("jvm") version "2.0.21" apply false
+    kotlin("jvm") version "2.2.0" apply false
 }

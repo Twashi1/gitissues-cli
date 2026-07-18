@@ -1,14 +1,12 @@
 package gitissues
 
-class GitIssues {
-    external fun add(
-        a: Int,
-        b: Int,
-    ): Int
+object GitIssues {
+    fun init() = gitissues.jni.GitIssues.init()
 
-    companion object {
-        init {
-            System.loadLibrary("gitissues_jni")
-        }
-    }
+    fun terminate() = gitissues.jni.GitIssues.terminate()
+
+    fun createRegistry(): Registry =
+        Registry(
+            gitissues.jni.GitIssues.registryCreate(),
+        )
 }
