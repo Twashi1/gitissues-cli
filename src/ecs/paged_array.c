@@ -52,8 +52,7 @@ bool containsEntitySparseArray(struct SparseArray const *array, Entity entity) {
           _ECS_NULL);
 }
 
-uint32_t getElemEntitySparseArray(struct SparseArray const *array,
-                                  Entity entity) {
+uint32_t getIndexSparseArray(struct SparseArray const *array, Entity entity) {
   if (DEBUG_CONDITION(!containsEntitySparseArray(array, entity))) {
     return UINT32_MAX;
   }

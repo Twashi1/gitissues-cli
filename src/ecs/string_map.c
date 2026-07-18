@@ -19,7 +19,7 @@ struct StringMap createStringMap(void) {
 }
 
 void freeStringMap(struct StringMap *map) {
-  dropBlockAllocator(&map->stringAllocator);
+  freeBlockAllocator(&map->stringAllocator);
   free(map->data);
   free(map->dense.data);
 }

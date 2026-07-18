@@ -43,9 +43,15 @@ _Static_assert(alignof(struct UmbraString) == 8 ||
 // frequent changes
 bool compare(struct UmbraString const a, struct UmbraString const b);
 bool _attemptInplaceConstruction(struct UmbraString *s, char const *value);
-void setModifiableString(struct UmbraString *s, char const *value,
-                         struct BlockAllocator *allocator);
-void setImmutableString(struct UmbraString *s, char const *value);
+
+// Semantics of this naming is unclear; should be take ownership
+void createUmbraStringLifetime(struct UmbraString *s, char const *value);
+void createUmbraStringAllocate(struct UmbraString *s, char const *value,
+                               struct BlockAllocator *allocator);
+void createUmbraStringTransient(struct UmbraString *s, char const *value,
+                                struct ImplicitAllocator *allocator);
+void freeUmbraStringTransient(struct UmbraString *s,
+                              struct ImplicitAllocator *allocator);
 
 void saveUmbraString(struct UmbraString const *s, FILE *p);
 struct UmbraString loadUmbraString(struct BlockAllocator *allocator, FILE *p);

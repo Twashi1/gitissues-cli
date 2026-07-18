@@ -10,6 +10,7 @@ enum ErrorCode {
   GITISSUES_ENTITY_DID_NOT_EXIST,
   GITISSUES_STRING_MAP_INSERTION_FAIL,
   GITISSUES_JSON_FAIL_READ,
+  GITISSUES_ERROR,
 };
 
 static inline char const *errorCodeString(enum ErrorCode ec) {
@@ -26,6 +27,8 @@ static inline char const *errorCodeString(enum ErrorCode ec) {
     return "STRING_MAP_INSERTION_FAIL";
   case GITISSUES_JSON_FAIL_READ:
     return "JSON_FAIL_READ";
+  case GITISSUES_ERROR:
+    return "ERROR";
   default:
     return "Unknown";
   }

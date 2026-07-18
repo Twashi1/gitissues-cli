@@ -12,9 +12,9 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 set(GITISSUES_SOURCES
     src/umbra_string.c
-    src/tag.c
     src/issue.c
     src/allocator.c
+    src/global.c
     src/ecs/component_pool.c
     src/ecs/entity.c
     src/ecs/paged_array.c
@@ -49,5 +49,13 @@ add_executable(gitissues_tests src/tests/test.c)
 target_link_libraries(gitissues_tests PRIVATE gitissues_lib)
 
 if (BUILD_JNI)
-  add_subdirectory(jni)
+  add_subdirectory(kotlin/jni)
+endif()
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            ${CMAKE_BINARY_DIR}/compile_commands.json
+            ${CMAKE_SOURCE_DIR}/compile_commands.json
+    )
 endif()

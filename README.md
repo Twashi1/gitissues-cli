@@ -9,7 +9,7 @@ cmake --build --preset kotlin
 
 # Run Kotlin CLI
 cd kotlin
-./gradlew :cli:run --args="5 10"
+./gradlew :cli:run
 ```
 
 ## Description

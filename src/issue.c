@@ -1,20 +1,19 @@
 #include <gitissues/issue.h>
 
-struct Issue createIssue(struct Registry *registry, char const *title) {
+struct Issue createIssue(struct Registry *registry) {
   struct Issue issue = {0};
   issue.entity = createEntity(registry);
-  issue.title = title;
 
   return issue;
 }
 
 void freeIssue(struct Registry *registry, struct Issue *issue) {
   freeEntity(registry, issue->entity);
-  free(issue->tags.data);
 }
 
 ComponentID registerTag(struct Registry *registry, struct UmbraString const tag,
                         uint32_t sizeOfType) {
+  // TODO: confirm not already registered
   return registerComponentID(registry, tag, sizeOfType);
 }
 
@@ -24,20 +23,39 @@ void addTagByName(struct Registry *registry, struct Issue *issue,
 
   addTagById(registry, issue, id, data);
 }
+
 void addTagById(struct Registry *registry, struct Issue *issue, ComponentID id,
                 uint8_t *data) {
   addComponent(registry, issue->entity, id, data);
+}
 
-  if (issue->tags.size >= issue->tags.capacity) {
-    uint32_t newCapacity =
-        issue->tags.capacity + (issue->tags.capacity >> 1) + 1;
-    void *p = realloc(issue->tags.data, sizeof(ComponentID) * newCapacity);
-    DEBUG_ASSERT(p != NULL, "Failed to allocate issue tags");
-    issue->tags.data = p;
-    issue->tags.capacity = newCapacity;
-  }
+void removeTagByName(struct Registry *registry, struct Issue *issue,
+                     struct UmbraString const tag) {
+  removeTagById(registry, issue, getComponentID(registry, tag));
+}
 
-  // TODO: maintaining this is annoying
-  // ideally, for add/removes, we make this a small dense map?
-  issue->tags.data[issue->tags.size++] = id;
+void removeTagById(struct Registry *registry, struct Issue *issue,
+                   ComponentID id) {
+  removeComponent(registry, issue->entity, id);
+}
+
+uint8_t *getTagByName(struct Registry *registry, struct Issue *issue,
+                      struct UmbraString tag) {
+  return getTagById(registry, issue, getComponentID(registry, tag));
+}
+
+uint8_t *getTagById(struct Registry *registry, struct Issue *issue,
+                    ComponentID id) {
+  return getComponent(registry, issue->entity, id);
+}
+
+void jsonWriteIssue(struct Registry *registry, struct Issue *issue, FILE *p) {
+  saveEntityJson(registry, issue->entity, p);
+}
+
+enum ErrorCode jsonReadIssue(struct Registry *registry, struct JsonReader *p,
+                             struct Issue *value) {
+  value->entity = loadEntityJson(registry, p);
+
+  return GITISSUES_OK;
 }

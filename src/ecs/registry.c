@@ -5,6 +5,7 @@
 
 struct Registry createRegistry(void) {
   struct Registry registry = {0};
+  registry.lifetimeAllocations = createBlockAllocator(4096);
   return registry;
 }
 
@@ -17,9 +18,24 @@ void freeRegistry(struct Registry *registry) {
 
   free(registry->pools.data);
   free(registry->createdEntities.data);
+  freeBlockAllocator(&registry->lifetimeAllocations);
 }
 
 Entity createEntity(struct Registry *registry) {
+  // if (registry->availableEntities > 0) {
+  //   // Use nextEntity
+  //   Entity newEntity = registry->nextEntity;
+  //   // Swap nextEntity to update it
+  //   Entity nextNextEntity =
+  //       registry->createdEntities.data[registry->nextEntity];
+  //   registry->createdEntities.data[registry->nextEntity] = newEntity;
+  //   registry->nextEntity = nextNextEntity;
+  //
+  //   registry->availableEntities--;
+  //
+  //   return newEntity;
+  // }
+
   // TODO: use recycling properly
   Entity e = registry->createdEntities.size;
 
@@ -39,10 +55,29 @@ Entity createEntity(struct Registry *registry) {
   return e;
 }
 
-// TODO: how do we know what components to free for this entity? just checking
-// every component pool?
-// TODO: make this do something
-void freeEntity(struct Registry *registry, Entity entity) {}
+void freeEntity(struct Registry *registry, Entity entity) {
+  // TODO: highly inefficient
+  // Iterate all component pools
+  for (uint32_t i = 0; i < registry->componentIDMap.dense.size; i++) {
+    struct StringMapNode mapNode = registry->componentIDMap.dense.data[i];
+    ComponentID id = mapNode.value;
+
+    struct ComponentPool *pool = &registry->pools.data[id];
+    if (containsEntityComponentPool(pool, entity)) {
+      freeEntityComponentPool(pool, entity);
+    }
+  }
+
+  // Increment the implicit list
+  // Entity replacement = incrementEntityVersion(registry->nextEntity);
+  // TODO: recycling
+}
+
+bool isRegistered(struct Registry *registry, struct UmbraString string) {
+  ComponentID id = getStringMap(&registry->componentIDMap, string);
+
+  return id != _GITISSUES_COMPONENT_INVALID;
+}
 
 ComponentID registerComponentID(struct Registry *registry,
                                 struct UmbraString const string,
@@ -101,7 +136,7 @@ void removeComponent(struct Registry *registry, Entity entity, ComponentID id) {
 
 bool hasComponent(struct Registry *registry, Entity entity, ComponentID id) {
   struct ComponentPool *pool = &registry->pools.data[id];
-  return hasEntityComponentPool(pool, entity);
+  return containsEntityComponentPool(pool, entity);
 }
 
 uint8_t *getComponent(struct Registry *registry, Entity entity,
@@ -116,8 +151,16 @@ uint8_t *getOrNullComponent(struct Registry *registry, Entity entity,
   return getOrNullEntityComponentPool(pool, entity);
 }
 
-struct ComponentPool const *getPool(struct Registry *registry, ComponentID id) {
+struct ComponentPool *getPool(struct Registry *registry, ComponentID id) {
   return &registry->pools.data[id];
+}
+
+void setUserData(struct Registry *registry, ComponentID id, void *userData) {
+  getPool(registry, id)->userData = userData;
+}
+
+void *getUserData(struct Registry *registry, ComponentID id) {
+  return getPool(registry, id)->userData;
 }
 
 void saveRegistry(struct Registry const *registry, FILE *p) {
@@ -170,4 +213,104 @@ struct Registry loadRegistry(FILE *p) {
   registry.pools.capacity = registry.pools.size;
 
   return registry;
+}
+
+void saveEntityJson(struct Registry *registry, Entity entity, FILE *p) {
+  // We have no guarantee on ordering of component pools, so we have to store
+  // the tag names
+  jsonWriteObjectBegin(p);
+  bool writtenOne = false;
+
+  for (uint32_t i = 0; i < registry->pools.size; i++) {
+    struct ComponentPool *pool = &registry->pools.data[i];
+
+    if (!containsEntityComponentPool(pool, entity))
+      continue;
+
+    if (writtenOne) {
+      jsonWriteNext(p);
+    }
+
+    writtenOne = true;
+
+    struct UmbraString componentName =
+        registry->componentIDMap.dense.data[i].string;
+    jsonWriteKeyUmbra(componentName, p);
+
+    saveEntityJsonComponentPool(pool, entity, p);
+  }
+
+  jsonWriteObjectEnd(p);
+}
+
+// Load new entity
+Entity loadEntityJson(struct Registry *registry, struct JsonReader *p) {
+  jsonReadObjectBegin(p);
+
+  // assume user saves an entity;
+  // - we need to know which components the entity has; thus we do need the
+  // component strings
+  // - but what about creating the component pools; assuming they're not already
+  // created how do managers work?
+  // - user creates an association between components and custom management
+  // methods in their code?
+  // - somehow we assume user provides these callbacks
+
+  // -> should user only be able to save/load whole registry?
+  // -> we also want user to be able to translate issues into arbitrary JSON
+  // (currently saved to file, but ideally also a string stream)
+  // -> user must also be able to create new issues from scratch by loading
+  // arbitrary JSON
+  // -> but then user must provide the manager for each component (let's assume
+  // they've registers the relevant component pools)
+  Entity entity = createEntity(registry);
+
+  char next = jsonPeekNext(p);
+  for (; next != '\0' && next != '}'; next = jsonPeekNext(p)) {
+    char *key;
+
+    jsonReadKeyLifetime(p, &registry->lifetimeAllocations, &key);
+
+    struct UmbraString keyString = {0};
+    createUmbraStringLifetime(&keyString, key);
+
+    ComponentID id = getComponentID(registry, keyString);
+    DEBUG_ASSERT(isRegistered(registry, keyString),
+                 "Expected component to already be registered before loading "
+                 "entity with that component");
+    struct ComponentPool *pool = &registry->pools.data[id];
+
+    // We assume user already registers the component pool somehow
+    addEntityJsonComponentPool(pool, entity, p);
+  }
+
+  jsonReadObjectEnd(p);
+
+  return entity;
+}
+
+void reloadEntityJson(struct Registry *registry, Entity entity,
+                      struct JsonReader *p) {
+  jsonReadObjectBegin(p);
+
+  char next = jsonPeekNext(p);
+  for (; next != '\0' && next != '}'; next = jsonPeekNext(p)) {
+    char *key;
+
+    jsonReadKeyLifetime(p, &registry->lifetimeAllocations, &key);
+
+    struct UmbraString keyString = {0};
+    createUmbraStringLifetime(&keyString, key);
+
+    ComponentID id = getComponentID(registry, keyString);
+    DEBUG_ASSERT(isRegistered(registry, keyString),
+                 "Expected component to already be registered before loading "
+                 "entity with that component");
+    struct ComponentPool *pool = &registry->pools.data[id];
+
+    // We assume user already registers the component pool somehow
+    reloadEntityJsonComponentPool(pool, entity, p);
+  }
+
+  jsonReadObjectEnd(p);
 }

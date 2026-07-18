@@ -165,8 +165,8 @@ void testECS(void) {
   ctx.registry = createRegistry();
   ctx.allocator = createBlockAllocator(4096);
 
-  setImmutableString(&ctx.fizz, "Fizz");
-  setModifiableString(&ctx.buzz, "Buzz", &ctx.allocator);
+  createUmbraStringLifetime(&ctx.fizz, "Fizz");
+  createUmbraStringAllocate(&ctx.buzz, "Buzz", &ctx.allocator);
 
   registerComponents(&ctx);
 

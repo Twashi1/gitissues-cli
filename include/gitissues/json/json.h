@@ -34,10 +34,18 @@ enum ErrorCode jsonReadUInt32(struct JsonReader *p, uint32_t *value);
 enum ErrorCode jsonReadInt64(struct JsonReader *p, int64_t *value);
 enum ErrorCode jsonReadUInt64(struct JsonReader *p, uint64_t *value);
 enum ErrorCode jsonReadFloat(struct JsonReader *p, float *value);
-enum ErrorCode jsonReadString(struct JsonReader *p,
-                              struct BlockAllocator *allocator, char **value);
-enum ErrorCode jsonReadKey(struct JsonReader *p,
-                           struct BlockAllocator *allocator, char **key);
+enum ErrorCode jsonReadStringLifetime(struct JsonReader *p,
+                                      struct BlockAllocator *allocator,
+                                      char **value);
+enum ErrorCode jsonReadStringTransient(struct JsonReader *p,
+                                       struct ImplicitAllocator *allocator,
+                                       char **value);
+enum ErrorCode jsonReadKeyLifetime(struct JsonReader *p,
+                                   struct BlockAllocator *allocator,
+                                   char **key);
+enum ErrorCode jsonReadKeyTransient(struct JsonReader *p,
+                                    struct ImplicitAllocator *allocator,
+                                    char **key);
 
 void jsonReadArrayBegin(struct JsonReader *p);
 void jsonReadArrayEnd(struct JsonReader *p);
@@ -45,5 +53,9 @@ void jsonReadObjectBegin(struct JsonReader *p);
 void jsonReadObjectEnd(struct JsonReader *p);
 // Returns true and consumes next element, or returns false
 bool jsonReadNext(struct JsonReader *p);
+char jsonPeekNext(struct JsonReader *p);
+
+// Assuming current character is a {, read until we find the matching curly
+size_t jsonGetLengthMatchObject(struct JsonReader *p);
 
 #endif

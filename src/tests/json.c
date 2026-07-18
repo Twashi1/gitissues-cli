@@ -42,8 +42,8 @@ static void testReading(struct JsonContext *ctx) {
 
   char *firstKey;
   char *firstValue;
-  jsonReadKey(&reader, &ctx->allocator, &firstKey);
-  jsonReadString(&reader, &ctx->allocator, &firstValue);
+  jsonReadKeyLifetime(&reader, &ctx->allocator, &firstKey);
+  jsonReadStringLifetime(&reader, &ctx->allocator, &firstValue);
 
   pushTest(&ctx->suite, "First key check");
   TEST_PASS_CONDITION(&ctx->suite, strcmp("hello world", firstKey) == 0);
@@ -53,7 +53,7 @@ static void testReading(struct JsonContext *ctx) {
   jsonReadNext(&reader);
 
   char *intarrayKey;
-  jsonReadKey(&reader, &ctx->allocator, &intarrayKey);
+  jsonReadKeyLifetime(&reader, &ctx->allocator, &intarrayKey);
   jsonReadArrayBegin(&reader);
 
   pushTest(&ctx->suite, "Intarray key check");
@@ -91,5 +91,5 @@ void testJson(void) {
   testReading(&ctx);
 
   freeSuite(&ctx.suite);
-  dropBlockAllocator(&ctx.allocator);
+  freeBlockAllocator(&ctx.allocator);
 }

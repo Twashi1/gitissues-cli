@@ -172,9 +172,9 @@ enum ErrorCode jsonReadFloat(struct JsonReader *p, float *value) {
   return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadString(struct JsonReader *p,
-                              struct BlockAllocator *allocator, char **value) {
-
+enum ErrorCode jsonReadStringLifetime(struct JsonReader *p,
+                                      struct BlockAllocator *allocator,
+                                      char **value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading string");
@@ -205,12 +205,17 @@ enum ErrorCode jsonReadString(struct JsonReader *p,
 
   // We end when i == '"'
   uint32_t stringLength = i - start;
-  // We add 1 for the null terminator
-  *value = allocateBlockAllocator(allocator, (stringLength + 1) * sizeof(char),
-                                  alignof(char));
-  DEBUG_ASSERT(value != NULL, "Failed to allocate space for string JsonReader");
-  memcpy(*value, p->data + start, stringLength * sizeof(char));
-  (*value)[stringLength] = '\0';
+
+  // We assume the user doesn't want the value
+  if (value != NULL) {
+    // We add 1 for the null terminator
+    *value = allocateBlockAllocator(
+        allocator, (stringLength + 1) * sizeof(char), alignof(char));
+    DEBUG_ASSERT(value != NULL,
+                 "Failed to allocate space for string JsonReader");
+    memcpy(*value, p->data + start, stringLength * sizeof(char));
+    (*value)[stringLength] = '\0';
+  }
 
   p->pos = i;
 
@@ -220,9 +225,78 @@ enum ErrorCode jsonReadString(struct JsonReader *p,
 
   return GITISSUES_OK;
 }
-enum ErrorCode jsonReadKey(struct JsonReader *p,
-                           struct BlockAllocator *allocator, char **key) {
-  jsonReadString(p, allocator, key);
+
+// TODO: terrible duplication
+enum ErrorCode jsonReadStringTransient(struct JsonReader *p,
+                                       struct ImplicitAllocator *allocator,
+                                       char **value) {
+  jsonSkipWhitespace(p);
+
+  DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading string");
+
+  // eat quotation mark
+  DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '"',
+               "Expected quotation mark");
+  p->pos++;
+
+  // read until unescaped quotation mark
+  bool escaped = false;
+  uint32_t start = p->pos;
+  uint32_t i;
+
+  // TODO: this doesn't properly deal with \n, \t, just \\ and \" (i think)
+  for (i = start; i < p->size; i++) {
+    if (p->data[i] == '"') {
+      if (!escaped)
+        break;
+    }
+
+    if (p->data[i] == '\\') {
+      escaped = !escaped;
+    } else {
+      escaped = false;
+    }
+  }
+
+  // We end when i == '"'
+  uint32_t stringLength = i - start;
+
+  // We assume the user doesn't want the value
+  if (value != NULL) {
+    // We add 1 for the null terminator
+    *value = allocateImplicitAllocator(
+        allocator, (stringLength + 1) * sizeof(char), alignof(char));
+    DEBUG_ASSERT(value != NULL,
+                 "Failed to allocate space for string JsonReader");
+    memcpy(*value, p->data + start, stringLength * sizeof(char));
+    (*value)[stringLength] = '\0';
+  }
+
+  p->pos = i;
+
+  DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '"',
+               "Expected quotation mark");
+  p->pos++;
+
+  return GITISSUES_OK;
+}
+
+enum ErrorCode jsonReadKeyTransient(struct JsonReader *p,
+                                    struct ImplicitAllocator *allocator,
+                                    char **key) {
+  jsonReadStringTransient(p, allocator, key);
+
+  DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == ':',
+               "Expected colon after reading key");
+  p->pos++;
+
+  return GITISSUES_OK;
+}
+
+enum ErrorCode jsonReadKeyLifetime(struct JsonReader *p,
+                                   struct BlockAllocator *allocator,
+                                   char **key) {
+  jsonReadStringLifetime(p, allocator, key);
 
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == ':',
                "Expected colon after reading key");
@@ -232,24 +306,28 @@ enum ErrorCode jsonReadKey(struct JsonReader *p,
 }
 
 void jsonReadArrayBegin(struct JsonReader *p) {
+  jsonSkipWhitespace(p);
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '[',
                "Expected [ at start of array");
   p->pos++;
 }
 
 void jsonReadArrayEnd(struct JsonReader *p) {
+  jsonSkipWhitespace(p);
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == ']',
                "Expected ] at end of array");
   p->pos++;
 }
 
 void jsonReadObjectBegin(struct JsonReader *p) {
+  jsonSkipWhitespace(p);
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '{',
                "Expected { at start of array");
   p->pos++;
 }
 
 void jsonReadObjectEnd(struct JsonReader *p) {
+  jsonSkipWhitespace(p);
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '}',
                "Expected } at end of array");
   p->pos++;
@@ -264,4 +342,43 @@ bool jsonReadNext(struct JsonReader *p) {
   }
 
   return false;
+}
+
+char jsonPeekNext(struct JsonReader *p) {
+  jsonSkipWhitespace(p);
+
+  if (p->pos >= p->size) {
+    return '\0';
+  }
+
+  return p->data[p->pos];
+}
+
+size_t jsonGetLengthMatchObject(struct JsonReader *p) {
+  jsonSkipWhitespace(p);
+
+  DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '{',
+               "Expected to start at curly");
+
+  size_t curlySeen = 0;
+  size_t start = p->pos;
+
+  for (size_t i = p->pos; i < p->size; i++) {
+    char c = p->data[i];
+
+    if (c == '{')
+      ++curlySeen;
+    if (c == '}') {
+      DEBUG_ASSERT(curlySeen > 0, "Mismatched {} braces");
+      --curlySeen;
+    }
+
+    // Found the match
+    if (curlySeen == 0) {
+      return i - start;
+    }
+  }
+
+  DEBUG_ASSERT(false, "Mismatched curlys");
+  return 0;
 }

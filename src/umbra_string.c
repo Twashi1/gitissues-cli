@@ -1,3 +1,4 @@
+#include "gitissues/allocator.h"
 #include <gitissues/umbra_string.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -58,8 +59,17 @@ bool _attemptInplaceConstruction(struct UmbraString *s, char const *value) {
   return true;
 }
 
-void setModifiableString(struct UmbraString *s, char const *value,
-                         struct BlockAllocator *allocator) {
+void createUmbraStringLifetime(struct UmbraString *s, char const *value) {
+  if (_attemptInplaceConstruction(s, value))
+    return;
+
+  s->ptr = value;
+
+  return;
+}
+
+void createUmbraStringAllocate(struct UmbraString *s, char const *value,
+                               struct BlockAllocator *allocator) {
   if (_attemptInplaceConstruction(s, value))
     return;
 
@@ -77,14 +87,32 @@ void setModifiableString(struct UmbraString *s, char const *value,
   return;
 }
 
-void setImmutableString(struct UmbraString *s, char const *value) {
+void createUmbraStringTransient(struct UmbraString *s, char const *value,
+                                struct ImplicitAllocator *allocator) {
   if (_attemptInplaceConstruction(s, value))
     return;
 
-  // If larger, just copy the actual pointer, we have guarantee on the lifetime
-  s->ptr = value;
+  // Allocate larger block for string
+  void *memory = allocateImplicitAllocator(allocator, s->size, alignof(char));
+
+  // TODO: return fail code?
+  if (memory == NULL)
+    return;
+
+  // Note we don't include the \0 terminator
+  memcpy(memory, value, s->size);
+  s->ptr = memory;
 
   return;
+}
+
+void freeUmbraStringTransient(struct UmbraString *s,
+                              struct ImplicitAllocator *allocator) {
+  // Allocated in place
+  if (s->size <= 12)
+    return;
+
+  freeFastAllocationImplicitAllocator(allocator, (void *)s->ptr, s->size);
 }
 
 void saveUmbraString(struct UmbraString const *s, FILE *p) {

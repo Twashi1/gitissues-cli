@@ -11,9 +11,9 @@ void testRegistry(void) {
   Entity *e = malloc(sizeof(Entity) * 1000);
 
   struct UmbraString fizz;
-  setImmutableString(&fizz, "Fizz");
+  createUmbraStringLifetime(&fizz, "Fizz");
   struct UmbraString buzz;
-  setModifiableString(&buzz, "Buzz", &allocator);
+  createUmbraStringAllocate(&buzz, "Buzz", &allocator);
 
   printf("Setup umbra strings\n");
 

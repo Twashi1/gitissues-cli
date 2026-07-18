@@ -1,3 +1,4 @@
 build/
 .gradle/
 *.class
+compile_commands.json

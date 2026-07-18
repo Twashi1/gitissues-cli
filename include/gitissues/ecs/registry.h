@@ -6,6 +6,7 @@
 #include <gitissues/ecs/string_map.h>
 #include <stdio.h>
 
+// TODO: implement recycling
 struct Registry {
   struct {
     Entity *data;
@@ -15,6 +16,8 @@ struct Registry {
 
   Entity nextEntity;
   uint32_t availableEntities;
+  struct BlockAllocator lifetimeAllocations;
+  struct ImplicitAllocator transientAllocations;
 
   struct StringMap componentIDMap;
   struct {
@@ -32,10 +35,9 @@ struct Registry createRegistry(void);
 void freeRegistry(struct Registry *registry);
 
 Entity createEntity(struct Registry *registry);
-// TODO: how do we know what components to free for this entity? just checking
-// every component pool?
 void freeEntity(struct Registry *registry, Entity entity);
 
+bool isRegistered(struct Registry *registry, struct UmbraString string);
 ComponentID registerComponentID(struct Registry *registry,
                                 struct UmbraString const string,
                                 uint32_t sizeOfType);
@@ -48,9 +50,18 @@ uint8_t *getComponent(struct Registry *registry, Entity entity, ComponentID id);
 uint8_t *getOrNullComponent(struct Registry *registry, Entity entity,
                             ComponentID id);
 bool hasComponent(struct Registry *registry, Entity entity, ComponentID id);
-struct ComponentPool const *getPool(struct Registry *registry, ComponentID id);
+struct ComponentPool *getPool(struct Registry *registry, ComponentID id);
+
+void setUserData(struct Registry *registry, ComponentID id, void *userData);
+void *getUserData(struct Registry *registry, ComponentID id);
 
 void saveRegistry(struct Registry const *registry, FILE *p);
 struct Registry loadRegistry(FILE *p);
+
+void saveEntityJson(struct Registry *registry, Entity entity, FILE *p);
+// Load new entity
+Entity loadEntityJson(struct Registry *registry, struct JsonReader *p);
+void reloadEntityJson(struct Registry *registry, Entity entity,
+                      struct JsonReader *p);
 
 #endif

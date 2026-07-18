@@ -21,8 +21,8 @@ static inline void _logMessage(char const *level, char const *file, int line,
 
 #define GITISSUES_LOG_LEVEL(level, fmt, ...)                                   \
   do {                                                                         \
-    _logMessage(level, __FILE__ + GITISSUES_SOURCE_DIR_LENGTH, __LINE__, fmt,  \
-                ##__VA_ARGS__);                                                \
+    _logMessage(level, (char *)__FILE__ + GITISSUES_SOURCE_DIR_LENGTH,         \
+                __LINE__, fmt, ##__VA_ARGS__);                                 \
   } while (0)
 
 #if defined(NDEBUG)

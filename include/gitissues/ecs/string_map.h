@@ -57,7 +57,7 @@ static inline uint32_t fnv1aHashUmbra(struct UmbraString const string) {
 // sequentially, we can make this more efficient
 // TODO: consider implementation of robin-hood hashing, but for now, simple
 // linear probing will work
-//  notably, no deletion, so tombstone elements aren't required
+//  no deletion, so tombstone elements aren't required
 struct StringMapNode {
   struct UmbraString string;
   // TODO: prefer instead 3 bytes distance, 1 byte hash?

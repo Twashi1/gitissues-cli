@@ -3,21 +3,15 @@
 
 #include <gitissues/ecs/registry.h>
 #include <gitissues/ecs/string_map.h>
-#include <gitissues/tag.h>
+#include <gitissues/json/json.h>
 #include <stdint.h>
 
 struct Issue {
-  char const *title;
   Entity entity;
-
-  struct {
-    ComponentID *data;
-    uint32_t size;
-    uint32_t capacity;
-  } tags;
 };
 
-struct Issue createIssue(struct Registry *registry, char const *title);
+// TODO: don't pass in Issue*, just pass in Issue
+struct Issue createIssue(struct Registry *registry);
 void freeIssue(struct Registry *registry, struct Issue *issue);
 
 ComponentID registerTag(struct Registry *registry, struct UmbraString const tag,
@@ -27,7 +21,21 @@ void addTagByName(struct Registry *registry, struct Issue *issue,
 void addTagById(struct Registry *registry, struct Issue *issue, ComponentID id,
                 uint8_t *data);
 
+void removeTagByName(struct Registry *registry, struct Issue *issue,
+                     struct UmbraString const tag);
+void removeTagById(struct Registry *registry, struct Issue *issue,
+                   ComponentID id);
+
+uint8_t *getTagByName(struct Registry *registry, struct Issue *issue,
+                      struct UmbraString tag);
+uint8_t *getTagById(struct Registry *registry, struct Issue *issue,
+                    ComponentID id);
+
 // TODO: load/save by text (all to JSON; provide utilities to write to JSON,
 // then user-defined functions?)
+
+void jsonWriteIssue(struct Registry *registry, struct Issue *issue, FILE *p);
+enum ErrorCode jsonReadIssue(struct Registry *registry, struct JsonReader *p,
+                             struct Issue *value);
 
 #endif
