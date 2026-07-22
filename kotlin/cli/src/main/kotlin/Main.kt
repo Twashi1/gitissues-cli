@@ -43,8 +43,12 @@ fun main() {
 
         issue.save("issue.dat")
 
+        println("Saved player object")
+
         issue.close()
     }
+
+    println("Terminating program")
 
     GitIssues.terminate()
 }

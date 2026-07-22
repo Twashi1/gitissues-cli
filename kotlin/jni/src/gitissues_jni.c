@@ -4,9 +4,6 @@
 #include <gitissues/umbra_string.h>
 #include <jni.h>
 
-// TODO: instead of returning pointers to issues, issues can just be an integer
-// we return
-
 struct GitIssuesCodecInfo {
   jobject codec;
   jclass clazz;
@@ -17,8 +14,27 @@ struct GitIssuesCodecInfo {
 
 _Static_assert(sizeof(jlong) >= sizeof(intptr_t),
                "jlong must be at least as large as intptr_t");
-_Static_assert(sizeof(jlong) >= sizeof(struct Issue),
-               "jlong must be at least as large as an issue struct");
+
+static inline jlong IssueToID(struct Issue issue) {
+  _Static_assert(sizeof(jlong) >= sizeof(struct Issue),
+                 "jlong must be at least as large as an issue struct");
+  return (jlong)issue.entity;
+}
+
+static inline struct Issue IDToIssue(jlong id) {
+  struct Issue issue;
+  issue.entity = (Entity)id;
+
+  return issue;
+}
+
+static inline jlong RegistryToID(struct Registry *registry) {
+  return (jlong)(intptr_t)registry;
+}
+
+static inline struct Registry *IDToRegistry(jlong id) {
+  return (struct Registry *)(intptr_t)id;
+}
 
 static struct GitIssuesCodecInfo createCodecInfo(JNIEnv *env, jobject codec) {
   jclass clazz = (*env)->GetObjectClass(env, codec);
@@ -51,7 +67,7 @@ Java_gitissues_jni_GitIssues_registryCreate(JNIEnv *env, jclass class) {
       lifetimeAllocate(sizeof(struct Registry), alignof(struct Registry));
   *regPointer = createRegistry();
 
-  return (jlong)(intptr_t)regPointer;
+  return RegistryToID(regPointer);
 }
 
 JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_registryFree(JNIEnv *env,
@@ -60,7 +76,7 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_registryFree(JNIEnv *env,
   (void)env;
   (void)class;
 
-  struct Registry *regPointer = (struct Registry *)(intptr_t)handle;
+  struct Registry *regPointer = IDToRegistry(handle);
 
   freeRegistry(regPointer);
 }
@@ -75,11 +91,9 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_issueCreate(
   (void)env;
   (void)class;
 
-  struct Issue *issuePointer =
-      transientAllocate(sizeof(struct Issue), alignof(struct Issue));
-  *issuePointer = createIssue((struct Registry *)registry);
+  struct Issue issue = createIssue(IDToRegistry(registry));
 
-  return (jlong)(intptr_t)issuePointer;
+  return IssueToID(issue);
 }
 
 JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_issueFree(JNIEnv *env,
@@ -89,8 +103,9 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_issueFree(JNIEnv *env,
   (void)env;
   (void)class;
 
-  freeIssue((struct Registry *)registry, (struct Issue *)issue);
-  freeTransient((struct Issue *)issue, sizeof(struct Issue));
+  struct Issue issueStruct = IDToIssue(issue);
+
+  freeIssue(IDToRegistry(registry), &issueStruct);
 }
 
 JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_getTagID(JNIEnv *env,
@@ -99,7 +114,7 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_getTagID(JNIEnv *env,
                                                               jstring string) {
   (void)class;
 
-  struct Registry *registryPointer = (struct Registry *)registry;
+  struct Registry *registryPointer = IDToRegistry(registry);
 
   char const *charString = (*env)->GetStringUTFChars(env, string, NULL);
   DEBUG_ASSERT(charString != NULL,
@@ -124,11 +139,10 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_registerTag(
 
   struct Registry *registryPointer = (struct Registry *)registry;
 
-  struct GitIssuesCodecInfo info = createCodecInfo(env, codec);
   // TODO: should be lifetime attached to registry if possible
   struct GitIssuesCodecInfo *infoPtr = lifetimeAllocate(
       sizeof(struct GitIssuesCodecInfo), alignof(struct GitIssuesCodecInfo));
-  *infoPtr = info;
+  *infoPtr = createCodecInfo(env, codec);
 
   char const *charString = (*env)->GetStringUTFChars(env, string, NULL);
   DEBUG_ASSERT(charString != NULL,
@@ -147,29 +161,30 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_registerTag(
 }
 
 JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_attachTag(
-    JNIEnv *env, jclass class, jlong registry, jlong issue, jlong tagId,
+    JNIEnv *env, jclass class, jlong registry, jlong issueId, jlong tagId,
     jobject data) {
   (void)class;
 
-  struct Registry *registryPointer = (struct Registry *)registry;
+  struct Registry *registryPointer = IDToRegistry(registry);
+  struct Issue issue = IDToIssue(issueId);
 
   jobject global = (*env)->NewGlobalRef(env, data);
 
-  addTagById(registryPointer, (struct Issue *)issue, (ComponentID)tagId,
-             (uint8_t *)&global);
+  addTagById(registryPointer, &issue, (ComponentID)tagId, (uint8_t *)&global);
 }
 
 JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_detachTag(
-    JNIEnv *env, jclass class, jlong registry, jlong issue, jlong tagId) {
+    JNIEnv *env, jclass class, jlong registry, jlong issueId, jlong tagId) {
   (void)class;
 
-  uint8_t *tagData = getTagById((struct Registry *)registry,
-                                (struct Issue *)issue, (ComponentID)tagId);
+  struct Registry *registryPointer = IDToRegistry(registry);
+  struct Issue issue = IDToIssue(issueId);
+
+  uint8_t *tagData = getTagById(registryPointer, &issue, (ComponentID)tagId);
   jobject global = *(jobject *)tagData;
   jobject local = (*env)->NewLocalRef(env, global);
 
-  removeTagById((struct Registry *)registry, (struct Issue *)issue,
-                (ComponentID)tagId);
+  removeTagById(registryPointer, &issue, (ComponentID)tagId);
 
   (*env)->DeleteGlobalRef(env, global);
 
@@ -177,29 +192,32 @@ JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_detachTag(
 }
 
 JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_getTag(
-    JNIEnv *env, jclass class, jlong registry, jlong issue, jlong tagId) {
+    JNIEnv *env, jclass class, jlong registry, jlong issueId, jlong tagId) {
   (void)env;
   (void)class;
 
-  uint8_t *tagData = getTagById((struct Registry *)registry,
-                                (struct Issue *)issue, (ComponentID)tagId);
+  struct Registry *registryPointer = IDToRegistry(registry);
+  struct Issue issue = IDToIssue(issueId);
+
+  uint8_t *tagData = getTagById(registryPointer, &issue, (ComponentID)tagId);
   jobject global = *(jobject *)tagData;
 
   return global;
 }
 
 JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_saveIssue(
-    JNIEnv *env, jclass class, jlong registry, jlong issue, jstring filename) {
+    JNIEnv *env, jclass class, jlong registry, jlong issueId,
+    jstring filename) {
   (void)class;
 
   // TODO: repeating code for saving/loading entity json
-  struct Issue *issuePtr = (struct Issue *)(intptr_t)issue;
-  struct Registry *registryPtr = (struct Registry *)(intptr_t)registry;
+  struct Registry *registryPtr = IDToRegistry(registry);
+  struct Issue issue = IDToIssue(issueId);
 
   // Open up file to save issue into
   char const *filenameCstring = (*env)->GetStringUTFChars(env, filename, NULL);
 
-  FILE *p = fopen(filenameCstring, "r");
+  FILE *p = fopen(filenameCstring, "w");
   DEBUG_ASSERT(p != NULL, "Failed to open file");
   (*env)->ReleaseStringUTFChars(env, filename, filenameCstring);
 
@@ -210,11 +228,11 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_saveIssue(
   for (uint32_t i = 0; i < registryPtr->pools.size; i++) {
     struct ComponentPool *pool = &registryPtr->pools.data[i];
 
-    if (!hasComponent(registryPtr, issuePtr->entity, (ComponentID)i)) {
+    if (!hasComponent(registryPtr, issue.entity, (ComponentID)i)) {
       continue;
     }
 
-    uint8_t *tagData = getEntityComponentPool(pool, issuePtr->entity);
+    uint8_t *tagData = getEntityComponentPool(pool, issue.entity);
     struct GitIssuesCodecInfo *info = getUserDataComponentPool(pool);
     jobject global = *(jobject *)tagData;
 
@@ -225,7 +243,7 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_saveIssue(
     char const *codecCstring =
         (*env)->GetStringUTFChars(env, codecString, NULL);
 
-    if (first) {
+    if (!first) {
       jsonWriteNext(p);
       first = false;
     }
@@ -253,10 +271,8 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadIssue(
     JNIEnv *env, jclass class, jlong registry, jstring filename) {
   (void)class;
 
-  struct Registry *registryPtr = (struct Registry *)(intptr_t)registry;
-  struct Issue *issuePtr =
-      transientAllocate(sizeof(struct Issue), alignof(struct Issue));
-  *issuePtr = createIssue(registryPtr);
+  struct Registry *registryPtr = IDToRegistry(registry);
+  struct Issue issue = createIssue(registryPtr);
 
   char const *filenameCstring = (*env)->GetStringUTFChars(env, filename, NULL);
 
@@ -309,7 +325,7 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadIssue(
 
     // Add object to entity
     jobject global = (*env)->NewGlobalRef(env, object);
-    addTagById(registryPtr, issuePtr, id, (uint8_t *)&global);
+    addTagById(registryPtr, &issue, id, (uint8_t *)&global);
 
     jsonReadObjectEnd(&reader);
 
@@ -321,5 +337,5 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadIssue(
 
   jsonCloseFile(&reader);
 
-  return (jlong)(intptr_t)issuePtr;
+  return IssueToID(issue);
 }
