@@ -1,5 +1,6 @@
 #include <alloca.h>
 #include <gitissues/allocator.h>
+#include <gitissues/log.h>
 
 struct UniformSizeImplicitBuffer createImplicitBuffer(uint32_t blockSize) {
   struct UniformSizeImplicitBuffer buffer = {0};
@@ -14,6 +15,7 @@ struct UniformSizeImplicitBuffer createImplicitBuffer(uint32_t blockSize) {
 
   return buffer;
 }
+
 void freeImplicitBuffer(struct UniformSizeImplicitBuffer *buffer) {
   struct UniformSizeImplicitBuffer *current = buffer;
 
@@ -21,7 +23,16 @@ void freeImplicitBuffer(struct UniformSizeImplicitBuffer *buffer) {
     free(current->data);
     struct UniformSizeImplicitBuffer *group = current;
     current = current->nextObject;
-    free(group);
+    // TODO: free all except the last buffer
+    // TODO: really strange and error-prone semantics, essentially
+    //  when using ImplicitAllocator, the first buffer is allocated in the
+    //  object itself when we exhaust space in the first buffer, we add a new
+    //  buffer to the *head* thus every buffer except the tail is malloc'd, with
+    //  the tail being allocated on the allocator
+    //  needless to say; terrible system, replace with allocations in the
+    //  allocator itself (create a dynamic array)
+    if (current != NULL)
+      free(group);
   };
 }
 
@@ -136,6 +147,9 @@ struct ImplicitAllocator createImplicitAllocator(void) {
 }
 
 void freeImplicitAllocator(struct ImplicitAllocator *allocator) {
+  if (allocator == NULL)
+    return;
+
   freeImplicitBuffer(&allocator->buffer8);
   freeImplicitBuffer(&allocator->buffer16);
   freeImplicitBuffer(&allocator->buffer24);
@@ -204,6 +218,7 @@ void freeFastAllocationImplicitAllocator(struct ImplicitAllocator *allocator,
     return;
   }
 
+  GITISSUES_LOG_DEBUG("Defaulting to free in freeTransientAllocation");
   free(data);
 }
 

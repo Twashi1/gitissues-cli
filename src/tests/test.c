@@ -1,4 +1,5 @@
 #include <gitissues/defines.h>
+#include <gitissues/tests/allocator.h>
 #include <gitissues/tests/ecs.h>
 #include <gitissues/tests/json.h>
 #include <gitissues/tests/test.h>
@@ -49,6 +50,9 @@ void pushTest(struct Suite *suite, char const *name) {
 }
 
 void testFailed(struct Suite *suite, char const *reason) {
+  if (suite->tests.size == 0)
+    return;
+
   // TODO: additional context like line number passed in through a macro
   char const *testName = suite->tests.data[suite->tests.size - 1];
   suite->tests.size--;
@@ -59,7 +63,11 @@ void testFailed(struct Suite *suite, char const *reason) {
   depth = depth > 15 ? 15 : depth;
   memset(buf, (int)'\t', depth);
 
-  printf("%s%s: %s\n", buf, testName, reason);
+  if (reason != NULL) {
+    printf("%s%s: %s\n", buf, testName, reason);
+  } else {
+    printf("%s%s\n", buf, testName);
+  }
 
   for (uint32_t i = 0; i < suite->headers.size; i++) {
     suite->headers.data[i].numTests++;
@@ -67,6 +75,9 @@ void testFailed(struct Suite *suite, char const *reason) {
 }
 
 void testPassed(struct Suite *suite, char const *message) {
+  if (suite->tests.size == 0)
+    return;
+
   // TODO: additional context like line number passed in through a macro
   char const *testName = suite->tests.data[suite->tests.size - 1];
   suite->tests.size--;
@@ -77,7 +88,11 @@ void testPassed(struct Suite *suite, char const *message) {
   depth = depth > 15 ? 15 : depth;
   memset(buf, (int)'\t', depth);
 
-  printf("%s%s: %s\n", buf, testName, message);
+  if (message != NULL) {
+    printf("%s%s: %s\n", buf, testName, message);
+  } else {
+    printf("%s%s\n", buf, testName);
+  }
 
   for (uint32_t i = 0; i < suite->headers.size; i++) {
     suite->headers.data[i].numTests++;
@@ -129,6 +144,7 @@ void popHeader(struct Suite *suite) {
 int main(void) {
   testECS();
   testJson();
+  testAllocator();
 
   return 0;
 }

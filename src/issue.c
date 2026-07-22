@@ -7,6 +7,7 @@ struct Issue createIssue(struct Registry *registry) {
   return issue;
 }
 
+// TODO: don't take pointer in most of these functions
 void freeIssue(struct Registry *registry, struct Issue *issue) {
   freeEntity(registry, issue->entity);
 }
