@@ -1,3 +1,4 @@
+#include "gitissues/defines.h"
 #include <alloca.h>
 #include <gitissues/allocator.h>
 #include <gitissues/log.h>
@@ -23,16 +24,7 @@ void freeImplicitBuffer(struct UniformSizeImplicitBuffer *buffer) {
     free(current->data);
     struct UniformSizeImplicitBuffer *group = current;
     current = current->nextObject;
-    // TODO: free all except the last buffer
-    // TODO: really strange and error-prone semantics, essentially
-    //  when using ImplicitAllocator, the first buffer is allocated in the
-    //  object itself when we exhaust space in the first buffer, we add a new
-    //  buffer to the *head* thus every buffer except the tail is malloc'd, with
-    //  the tail being allocated on the allocator
-    //  needless to say; terrible system, replace with allocations in the
-    //  allocator itself (create a dynamic array)
-    if (current != NULL)
-      free(group);
+    free(group);
   };
 }
 
@@ -150,13 +142,21 @@ void freeImplicitAllocator(struct ImplicitAllocator *allocator) {
   if (allocator == NULL)
     return;
 
-  freeImplicitBuffer(&allocator->buffer8);
-  freeImplicitBuffer(&allocator->buffer16);
-  freeImplicitBuffer(&allocator->buffer24);
-  freeImplicitBuffer(&allocator->buffer32);
-  freeImplicitBuffer(&allocator->buffer48);
-  freeImplicitBuffer(&allocator->buffer64);
-  freeImplicitBuffer(&allocator->buffer256);
+  freeImplicitBuffer(allocator->buffer8.nextObject);
+  freeImplicitBuffer(allocator->buffer16.nextObject);
+  freeImplicitBuffer(allocator->buffer24.nextObject);
+  freeImplicitBuffer(allocator->buffer32.nextObject);
+  freeImplicitBuffer(allocator->buffer48.nextObject);
+  freeImplicitBuffer(allocator->buffer64.nextObject);
+  freeImplicitBuffer(allocator->buffer256.nextObject);
+
+  free(allocator->buffer8.data);
+  free(allocator->buffer16.data);
+  free(allocator->buffer24.data);
+  free(allocator->buffer32.data);
+  free(allocator->buffer48.data);
+  free(allocator->buffer64.data);
+  free(allocator->buffer256.data);
 }
 
 void freeAllocationImplicitAllocator(struct ImplicitAllocator *allocator,
@@ -281,48 +281,32 @@ void *allocateArena(struct Arena *arena, uint32_t allocationSize,
 
 struct BlockAllocator createBlockAllocator(uint32_t blockSize) {
   struct BlockAllocator allocator;
-  allocator.arenas = NULL;
-  allocator.capacityArenas = 0;
+  allocator.arenas.data = NULL;
+  allocator.arenas.size = 0;
+  allocator.arenas.capacity = 0;
   allocator.blockSize = blockSize;
-  allocator.numArenas = 0;
 
-  _fitBlockAllocator(&allocator, _GITISSUES_DEFAULT_ARENA_COUNT);
+  ARRAY_RESERVE(allocator.arenas, _GITISSUES_DEFAULT_ARENA_COUNT,
+                ARRAY_GROWTH_PLUS_ONE);
 
   return allocator;
 }
 
 void freeBlockAllocator(struct BlockAllocator *allocator) {
-  for (uint32_t i = 0; i < allocator->numArenas; i++) {
-    freeArena(&allocator->arenas[i]);
+  for (uint32_t i = 0; i < allocator->arenas.size; i++) {
+    freeArena(&allocator->arenas.data[i]);
   }
 
-  free(allocator->arenas);
-}
-
-bool _fitBlockAllocator(struct BlockAllocator *allocator, uint32_t numArenas) {
-  if (numArenas < allocator->capacityArenas) {
-    return true;
-  }
-
-  // TODO: abstract into macro everywhere, too buggy
-  uint32_t growSize =
-      allocator->capacityArenas + (allocator->capacityArenas >> 1);
-  uint32_t newSize = numArenas > growSize ? numArenas + 1 : growSize;
-
-  void *p = realloc(allocator->arenas, sizeof(struct Arena) * newSize);
-  DEBUG_ASSERT(p != NULL, "Failed to allocate more arenas in block allocator");
-  allocator->arenas = p;
-  allocator->capacityArenas = newSize;
-
-  return true;
+  free(allocator->arenas.data);
 }
 
 void *allocateBlockAllocator(struct BlockAllocator *allocator,
                              uint32_t allocationSize, uint32_t alignment) {
   // If we have an arena allocated
-  if (allocator->numArenas > 0) {
-    // Go to front block
-    struct Arena *front = &allocator->arenas[allocator->numArenas - 1];
+  if (allocator->arenas.size > 0) {
+    // Go to the last block
+    // TODO: iterate arenas to find other possible slots?
+    struct Arena *front = &allocator->arenas.data[allocator->arenas.size - 1];
     void *p = allocateArena(front, allocationSize, alignment);
 
     if (p != NULL) {
@@ -330,19 +314,16 @@ void *allocateBlockAllocator(struct BlockAllocator *allocator,
     }
   }
 
-  // TODO: change to assertion
-  // Ensure enough space in internal dynamic array to fit new arena
-  if (UNLIKELY(!_fitBlockAllocator(allocator, allocator->numArenas + 1))) {
-    return NULL;
-  }
-
   // Create arena with at least enough size to fit this allocation
   uint64_t arenaBlockSize = allocationSize < allocator->blockSize
                                 ? allocator->blockSize
                                 : allocationSize;
+  struct Arena newArena = createArena(arenaBlockSize);
+  void *p = allocateArena(&newArena, allocationSize, alignment);
+  DEBUG_ASSERT(p != NULL, "Failed to allocate space in fresh arena?");
 
-  struct Arena *newArena = &allocator->arenas[allocator->numArenas++];
-  *newArena = createArena(arenaBlockSize);
+  // Ensure enough space in internal dynamic array to fit new arena
+  ARRAY_APPEND(allocator->arenas, newArena, ARRAY_GROWTH_PLUS_ONE);
 
-  return allocateArena(newArena, allocationSize, alignment);
+  return p;
 }

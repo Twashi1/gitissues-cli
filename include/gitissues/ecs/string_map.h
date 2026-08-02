@@ -2,7 +2,6 @@
 #define _GITISSUES_STRING_MAP_H_
 
 #include <gitissues/defines.h>
-#include <gitissues/errs.h>
 #include <gitissues/umbra_string.h>
 #include <math.h>
 #include <stdint.h>
@@ -105,14 +104,12 @@ struct StringMap {
 struct StringMap createStringMap(void);
 void freeStringMap(struct StringMap *map);
 
-enum ErrorCode reserveStringMap(struct StringMap *map, uint32_t minCapacity);
+void reserveStringMap(struct StringMap *map, uint32_t minCapacity);
 // TODO: make it clear we take ownership of the string, but don't modify it
-// TODO: use error code on both
-enum ErrorCode insertStringMap(struct StringMap *map, struct UmbraString string,
+void insertStringMap(struct StringMap *map, struct UmbraString string,
+                     ComponentID value);
+void _insertUncheckedStringMap(struct StringMap *map, struct UmbraString string,
                                ComponentID value);
-enum ErrorCode _insertUncheckedStringMap(struct StringMap *map,
-                                         struct UmbraString string,
-                                         ComponentID value);
 ComponentID getStringMap(struct StringMap *map, struct UmbraString string);
 
 void saveStringMap(struct StringMap const *map, FILE *p);

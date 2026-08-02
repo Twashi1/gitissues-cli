@@ -2,3 +2,5 @@ build/
 .gradle/
 *.class
 compile_commands.json
+kotlin/build/
+kotlin/bindings/build/

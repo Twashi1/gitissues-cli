@@ -28,15 +28,22 @@
 #define DEBUG_ASSERT(x, msg) assert((x) && msg);
 #endif
 
-#define ARRAY_GROWTH_FACTOR(cap) ((uint32_t)(cap + (cap >> 1) + 1))
-#define ARRAY_APPEND(array, item)                                              \
+#define ARRAY_GROWTH_ONE_HALF(cap) (cap + (cap >> 1) + 1)
+#define ARRAY_GROWTH_PLUS_ONE(cap) (cap + 1)
+#define ARRAY_RESERVE(array, newCap, growth)                                   \
   do {                                                                         \
-    if (array.size >= array.capacity) {                                        \
-      array.capacity = ARRAY_GROWTH_FACTOR(array.capacity);                    \
-      array.data = realloc(array.data, array.capacity * sizeof(*array.data));  \
-      DEBUG_ASSERT(array.data != NULL, "Out of memory in appending to array"); \
+    if ((array).capacity < newCap) {                                           \
+      (array).capacity = growth((array).capacity);                             \
+      (array).data =                                                           \
+          realloc((array).data, (array).capacity * sizeof(*(array).data));     \
+      DEBUG_ASSERT((array).data != NULL,                                       \
+                   "Out of memory reserving space for array");                 \
     }                                                                          \
-    array.data[array.size++] = item;                                           \
+  } while (0)
+#define ARRAY_APPEND(array, item, growth)                                      \
+  do {                                                                         \
+    ARRAY_RESERVE(array, (array).size + 1, growth);                            \
+    (array).data[(array).size++] = item;                                       \
   } while (0)
 
 #endif

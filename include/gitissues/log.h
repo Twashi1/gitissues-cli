@@ -2,7 +2,6 @@
 #define _GITISSUES_LOG_H_
 
 #include <gitissues/defines.h>
-#include <gitissues/errs.h>
 #include <stdarg.h>
 #include <stdio.h>
 

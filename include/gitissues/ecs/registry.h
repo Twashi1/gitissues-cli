@@ -6,6 +6,24 @@
 #include <gitissues/ecs/string_map.h>
 #include <stdio.h>
 
+struct PoolIterator {
+  uint8_t *start;
+  uint32_t count;
+  uint32_t sizeOfType;
+
+  struct Registry *registry;
+};
+
+// Iterate a set of entities that contain some signature
+struct EntityGroupIterator {
+  Entity *entities;
+  uint32_t entityCount;
+  ComponentID *ids;
+  uint32_t idCount;
+
+  struct Registry *registry;
+};
+
 // TODO: implement recycling
 struct Registry {
   struct {
@@ -63,5 +81,12 @@ void saveEntityJson(struct Registry *registry, Entity entity, FILE *p);
 Entity loadEntityJson(struct Registry *registry, struct JsonReader *p);
 void reloadEntityJson(struct Registry *registry, Entity entity,
                       struct JsonReader *p);
+
+struct PoolIterator iterateComponentPool(struct Registry *registry,
+                                         ComponentID id);
+struct EntityGroupIterator iterateComponentGroup(struct Registry *registry,
+                                                 ComponentID *ids,
+                                                 uint32_t numIds);
+void freeComponentGroupIterator(struct EntityGroupIterator *iterator);
 
 #endif

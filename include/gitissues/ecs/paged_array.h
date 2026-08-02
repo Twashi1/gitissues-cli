@@ -3,7 +3,6 @@
 
 #include <gitissues/defines.h>
 #include <gitissues/ecs/entity.h>
-#include <gitissues/errs.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,9 +25,7 @@ struct SparseArray {
 };
 
 struct SparseArray createSparseArray(void);
-enum ErrorCode reserveSparseArray(struct SparseArray *array);
-enum ErrorCode reserveIndexSparseArray(struct SparseArray *array,
-                                       uint32_t index);
+void reserveIndexSparseArray(struct SparseArray *array, uint32_t index);
 bool containsEntitySparseArray(struct SparseArray const *array, Entity entity);
 // Returns uint32_t: a mask of SparseElem only keeping the bottom 20 bits (we
 // store versions in the top 12)
@@ -36,10 +33,9 @@ bool containsEntitySparseArray(struct SparseArray const *array, Entity entity);
 uint32_t getIndexSparseArray(struct SparseArray const *array, Entity entity);
 // uint32_t* getEntityPtrSparseArray(struct SparseArray* array, Entity entity);
 // -- implement if needed
-enum ErrorCode addEntitySparseArray(struct SparseArray *array, Entity entity,
-                                    uint32_t value);
-enum ErrorCode releaseEntitySparseArray(struct SparseArray *array,
-                                        Entity entity);
+void addEntitySparseArray(struct SparseArray *array, Entity entity,
+                          uint32_t value);
+void releaseEntitySparseArray(struct SparseArray *array, Entity entity);
 void swapRemoveEntitySparseArray(struct SparseArray *array, Entity remove,
                                  Entity keep);
 void freeSparseArray(struct SparseArray *array);

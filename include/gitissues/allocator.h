@@ -15,9 +15,11 @@ struct Arena {
 };
 
 struct BlockAllocator {
-  struct Arena *arenas;
-  uint32_t numArenas;
-  uint32_t capacityArenas;
+  struct {
+    struct Arena *data;
+    uint32_t size;
+    uint32_t capacity;
+  } arenas;
   uint32_t blockSize;
 };
 

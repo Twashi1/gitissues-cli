@@ -1,6 +1,5 @@
 #include <gitissues/ecs/component_pool.h>
 #include <gitissues/ecs/paged_array.h>
-#include <gitissues/errs.h>
 #include <gitissues/log.h>
 
 struct ComponentPool
@@ -36,42 +35,37 @@ void setUserDataComponentPool(struct ComponentPool *pool, void *userData) {
   pool->userData = userData;
 }
 
-enum ErrorCode reserveComponentPool(struct ComponentPool *pool,
-                                    uint32_t index) {
+void reserveComponentPool(struct ComponentPool *pool, uint32_t index) {
   if (pool->dense.capacity > index)
-    return GITISSUES_OK;
+    return;
 
   uint32_t growthFactor = pool->dense.capacity + (pool->dense.capacity >> 1);
   uint32_t newCapacity = index >= growthFactor ? index + 1 : growthFactor;
 
   if (pool->manager.move == NULL) {
     uint8_t *pData = realloc(pool->dense.data, pool->sizeOfType * newCapacity);
-    if (pData == NULL) {
-      return GITISSUES_OUT_OF_MEMORY;
-    }
+    DEBUG_ASSERT(pData != NULL, "Failed to reallocate pool dense array");
+
     pool->dense.data = pData;
   } else {
     uint8_t *pData = malloc(pool->sizeOfType * newCapacity);
-    if (pData == NULL) {
-      return GITISSUES_OUT_OF_MEMORY;
-    }
+    DEBUG_ASSERT(pData != NULL, "Failed to reallocate pool dense array");
 
     // Move each data over
     for (uint32_t i = 0; i < pool->dense.size; i++) {
       pool->manager.move(pool->dense.data + (i * pool->sizeOfType),
                          pData + (i * pool->sizeOfType));
     }
+
+    free(pool->dense.data);
+    pool->dense.data = pData;
   }
 
   Entity *pEntity = realloc(pool->dense.entity, sizeof(Entity) * newCapacity);
-  if (pEntity == NULL) {
-    return GITISSUES_OUT_OF_MEMORY;
-  }
+  DEBUG_ASSERT(pEntity != NULL, "Failed to reallocate entity data");
 
   pool->dense.entity = pEntity;
   pool->dense.capacity = newCapacity;
-
-  return GITISSUES_OK;
 }
 
 uint8_t *emplaceEntityToComponentPool(struct ComponentPool *pool,
@@ -79,16 +73,11 @@ uint8_t *emplaceEntityToComponentPool(struct ComponentPool *pool,
 
   // Add entity to sparse array at position
   uint32_t entityIndex = pool->dense.size; // TODO: associate version?
-  enum ErrorCode ec = addEntitySparseArray(&pool->sparse, entity, entityIndex);
-  DEBUG_PRINT_ERROR("Adding entity to sparse array %s\n", ec);
-  if (DEBUG_CONDITION(ec != GITISSUES_OK))
-    return NULL;
+  addEntitySparseArray(&pool->sparse, entity, entityIndex);
 
   GITISSUES_LOG_DEBUG("Added entity, index %d to sparse array", entityIndex);
 
-  ec = reserveComponentPool(pool, entityIndex);
-  if (DEBUG_CONDITION(ec != GITISSUES_OK))
-    return NULL;
+  reserveComponentPool(pool, entityIndex);
 
   pool->dense.entity[entityIndex] = entity;
 
@@ -99,13 +88,11 @@ uint8_t *emplaceEntityToComponentPool(struct ComponentPool *pool,
   return dataPtr;
 }
 
-enum ErrorCode addEntityToComponentPool(struct ComponentPool *pool,
-                                        Entity entity, uint8_t *componentData) {
+void addEntityToComponentPool(struct ComponentPool *pool, Entity entity,
+                              uint8_t *componentData) {
   uint8_t *data = emplaceEntityToComponentPool(pool, entity);
-
-  if (DEBUG_CONDITION(data == NULL)) {
-    return GITISSUES_ERROR;
-  }
+  DEBUG_ASSERT(data != NULL,
+               "Failed to find slot for entity being added to sparse array");
 
   // TODO: can abstract this out better, move to variable
   if (pool->manager.move != NULL) {
@@ -115,12 +102,9 @@ enum ErrorCode addEntityToComponentPool(struct ComponentPool *pool,
   }
 
   pool->dense.size++;
-
-  return GITISSUES_OK;
 }
 
-enum ErrorCode freeEntityComponentPool(struct ComponentPool *pool,
-                                       Entity entity) {
+void freeEntityComponentPool(struct ComponentPool *pool, Entity entity) {
   uint32_t entityIndex = getIndexSparseArray(&pool->sparse, entity);
 
   // TODO: DEBUG assert entity matches at that position
@@ -128,7 +112,7 @@ enum ErrorCode freeEntityComponentPool(struct ComponentPool *pool,
   uint8_t *end = pool->dense.data + ((pool->dense.size - 1) * pool->sizeOfType);
 
   if (component == end) {
-    return popEntityComponentPool(pool);
+    popEntityComponentPool(pool);
   }
 
   // TODO: range-based can be sped up significantly, so many branches
@@ -153,24 +137,21 @@ enum ErrorCode freeEntityComponentPool(struct ComponentPool *pool,
   // Move entity ID over (no swap -- unnecessary)
   pool->dense.entity[entityIndex] = pool->dense.entity[pool->dense.size - 1];
   --(pool->dense.size);
-
-  return GITISSUES_OK;
 }
 
-enum ErrorCode saveEntityJsonComponentPool(struct ComponentPool *pool,
-                                           Entity entity, FILE *p) {
+void saveEntityJsonComponentPool(struct ComponentPool *pool, Entity entity,
+                                 FILE *p) {
   DEBUG_ASSERT(pool->manager.saveJson != NULL,
                "Cannot save JSON without saveJson method defined in manager");
 
   uint32_t index = getIndexSparseArray(&pool->sparse, entity);
   uint8_t *data = &pool->dense.data[index * pool->sizeOfType];
 
-  return pool->manager.saveJson(p, data);
+  pool->manager.saveJson(p, data);
 }
 
-enum ErrorCode reloadEntityJsonComponentPool(struct ComponentPool *pool,
-                                             Entity entity,
-                                             struct JsonReader *p) {
+void reloadEntityJsonComponentPool(struct ComponentPool *pool, Entity entity,
+                                   struct JsonReader *p) {
   DEBUG_ASSERT(pool->manager.loadJson != NULL,
                "Cannot load JSON without loadJson method defined in manager");
 
@@ -182,29 +163,27 @@ enum ErrorCode reloadEntityJsonComponentPool(struct ComponentPool *pool,
     pool->manager.delete(data);
   }
 
-  return pool->manager.loadJson(p, data);
+  pool->manager.loadJson(p, data);
 }
 
-enum ErrorCode addEntityJsonComponentPool(struct ComponentPool *pool,
-                                          Entity entity, struct JsonReader *p) {
+void addEntityJsonComponentPool(struct ComponentPool *pool, Entity entity,
+                                struct JsonReader *p) {
 
   DEBUG_ASSERT(pool->manager.loadJson != NULL,
                "Cannot load JSON without loadJson method defined in manager");
 
   uint8_t *data = emplaceEntityToComponentPool(pool, entity);
 
-  return pool->manager.loadJson(p, data);
+  pool->manager.loadJson(p, data);
 }
 
-enum ErrorCode popEntityComponentPool(struct ComponentPool *pool) {
+void popEntityComponentPool(struct ComponentPool *pool) {
   if (pool->manager.delete != NULL) {
     pool->manager.delete(pool->dense.data +
                          (pool->dense.size - 1) * pool->sizeOfType);
   }
 
   --(pool->dense.size);
-
-  return GITISSUES_OK;
 }
 
 void freeComponentPool(struct ComponentPool *pool) {
@@ -221,7 +200,6 @@ void freeComponentPool(struct ComponentPool *pool) {
 }
 
 uint8_t *getEntityComponentPool(struct ComponentPool *pool, Entity entity) {
-  // Get index from sparse array
   uint32_t denseIndex = getIndexSparseArray(&pool->sparse, entity);
   DEBUG_ASSERT(denseIndex != UINT32_MAX, "Entity not in sparse array");
 
@@ -230,6 +208,7 @@ uint8_t *getEntityComponentPool(struct ComponentPool *pool, Entity entity) {
 
 uint8_t *getOrNullEntityComponentPool(struct ComponentPool *pool,
                                       Entity entity) {
+  // Get index from sparse array
   uint32_t denseIndex = getIndexSparseArray(&pool->sparse, entity);
   if (denseIndex == UINT32_MAX)
     return NULL;

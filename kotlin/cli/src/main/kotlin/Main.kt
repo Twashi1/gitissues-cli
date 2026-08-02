@@ -5,6 +5,10 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+// TODO: will a realistic user even interact with this generally through a CLI? just provide good bindings for scripting...?
+// TODO: we actually want to make a shell; not a CLI
+
+// TODO: why do we have Serializable tag, we don't use it
 @Serializable
 data class PlayerTag(
     var name: String,
@@ -19,7 +23,7 @@ class PlayerTagCodec : Codec<PlayerTag> {
     override fun decode(value: String): PlayerTag = json.decodeFromString(value)
 }
 
-fun main() {
+fun main(args: Array<String>) {
     GitIssues.init()
 
     GitIssues.createRegistry().use { registry ->

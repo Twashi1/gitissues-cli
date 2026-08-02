@@ -1,6 +1,5 @@
-#include "gitissues/allocator.h"
-#include "gitissues/errs.h"
 #include <ctype.h>
+#include <gitissues/allocator.h>
 #include <gitissues/json/json.h>
 #include <inttypes.h>
 
@@ -92,7 +91,7 @@ void jsonSkipWhitespace(struct JsonReader *p) {
   }
 }
 
-enum ErrorCode jsonReadInt32(struct JsonReader *p, int32_t *value) {
+void jsonReadInt32(struct JsonReader *p, int32_t *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading int");
@@ -101,14 +100,13 @@ enum ErrorCode jsonReadInt32(struct JsonReader *p, int32_t *value) {
 
   if (sscanf(p->data + p->pos, "%d%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadUInt32(struct JsonReader *p, uint32_t *value) {
+void jsonReadUInt32(struct JsonReader *p, uint32_t *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading int");
@@ -117,14 +115,13 @@ enum ErrorCode jsonReadUInt32(struct JsonReader *p, uint32_t *value) {
 
   if (sscanf(p->data + p->pos, "%u%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadInt64(struct JsonReader *p, int64_t *value) {
+void jsonReadInt64(struct JsonReader *p, int64_t *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading int");
@@ -133,14 +130,14 @@ enum ErrorCode jsonReadInt64(struct JsonReader *p, int64_t *value) {
 
   if (sscanf(p->data + p->pos, "%" SCNd64 "%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadUInt64(struct JsonReader *p, uint64_t *value) {
+void jsonReadUInt64(struct JsonReader *p, uint64_t *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading int");
@@ -149,14 +146,13 @@ enum ErrorCode jsonReadUInt64(struct JsonReader *p, uint64_t *value) {
 
   if (sscanf(p->data + p->pos, "%" SCNu64 "%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadFloat(struct JsonReader *p, float *value) {
+void jsonReadFloat(struct JsonReader *p, float *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading float");
@@ -165,16 +161,14 @@ enum ErrorCode jsonReadFloat(struct JsonReader *p, float *value) {
 
   if (sscanf(p->data + p->pos, "%f%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadStringLifetime(struct JsonReader *p,
-                                      struct BlockAllocator *allocator,
-                                      char **value) {
+void jsonReadStringLifetime(struct JsonReader *p,
+                            struct BlockAllocator *allocator, char **value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading string");
@@ -222,14 +216,12 @@ enum ErrorCode jsonReadStringLifetime(struct JsonReader *p,
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '"',
                "Expected quotation mark");
   p->pos++;
-
-  return GITISSUES_OK;
 }
 
 // TODO: terrible duplication
-enum ErrorCode jsonReadStringTransient(struct JsonReader *p,
-                                       struct ImplicitAllocator *allocator,
-                                       char **value) {
+void jsonReadStringTransient(struct JsonReader *p,
+                             struct ImplicitAllocator *allocator,
+                             char **value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading string");
@@ -277,32 +269,24 @@ enum ErrorCode jsonReadStringTransient(struct JsonReader *p,
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '"',
                "Expected quotation mark");
   p->pos++;
-
-  return GITISSUES_OK;
 }
 
-enum ErrorCode jsonReadKeyTransient(struct JsonReader *p,
-                                    struct ImplicitAllocator *allocator,
-                                    char **key) {
+void jsonReadKeyTransient(struct JsonReader *p,
+                          struct ImplicitAllocator *allocator, char **key) {
   jsonReadStringTransient(p, allocator, key);
 
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == ':',
                "Expected colon after reading key");
   p->pos++;
-
-  return GITISSUES_OK;
 }
 
-enum ErrorCode jsonReadKeyLifetime(struct JsonReader *p,
-                                   struct BlockAllocator *allocator,
-                                   char **key) {
+void jsonReadKeyLifetime(struct JsonReader *p, struct BlockAllocator *allocator,
+                         char **key) {
   jsonReadStringLifetime(p, allocator, key);
 
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == ':',
                "Expected colon after reading key");
   p->pos++;
-
-  return GITISSUES_OK;
 }
 
 void jsonReadArrayBegin(struct JsonReader *p) {

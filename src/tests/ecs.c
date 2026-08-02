@@ -165,7 +165,7 @@ void testECS(void) {
   ctx.registry = createRegistry();
   ctx.allocator = createBlockAllocator(4096);
 
-  createUmbraStringLifetime(&ctx.fizz, "Fizz");
+  createUmbraStringParasitic(&ctx.fizz, "Fizz");
   createUmbraStringAllocate(&ctx.buzz, "Buzz", &ctx.allocator);
 
   registerComponents(&ctx);
@@ -177,6 +177,8 @@ void testECS(void) {
   componentTests(&ctx);
 
   popHeader(&ctx.suite);
+
+  // TODO: testing of registry
 
   serialiseRegistry(&ctx);
 

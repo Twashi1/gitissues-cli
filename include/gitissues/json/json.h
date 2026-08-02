@@ -29,23 +29,19 @@ void jsonWriteObjectEnd(FILE *p);
 void jsonWriteNext(FILE *p);
 
 void jsonSkipWhitespace(struct JsonReader *p);
-enum ErrorCode jsonReadInt32(struct JsonReader *p, int32_t *value);
-enum ErrorCode jsonReadUInt32(struct JsonReader *p, uint32_t *value);
-enum ErrorCode jsonReadInt64(struct JsonReader *p, int64_t *value);
-enum ErrorCode jsonReadUInt64(struct JsonReader *p, uint64_t *value);
-enum ErrorCode jsonReadFloat(struct JsonReader *p, float *value);
-enum ErrorCode jsonReadStringLifetime(struct JsonReader *p,
-                                      struct BlockAllocator *allocator,
-                                      char **value);
-enum ErrorCode jsonReadStringTransient(struct JsonReader *p,
-                                       struct ImplicitAllocator *allocator,
-                                       char **value);
-enum ErrorCode jsonReadKeyLifetime(struct JsonReader *p,
-                                   struct BlockAllocator *allocator,
-                                   char **key);
-enum ErrorCode jsonReadKeyTransient(struct JsonReader *p,
-                                    struct ImplicitAllocator *allocator,
-                                    char **key);
+void jsonReadInt32(struct JsonReader *p, int32_t *value);
+void jsonReadUInt32(struct JsonReader *p, uint32_t *value);
+void jsonReadInt64(struct JsonReader *p, int64_t *value);
+void jsonReadUInt64(struct JsonReader *p, uint64_t *value);
+void jsonReadFloat(struct JsonReader *p, float *value);
+void jsonReadStringLifetime(struct JsonReader *p,
+                            struct BlockAllocator *allocator, char **value);
+void jsonReadStringTransient(struct JsonReader *p,
+                             struct ImplicitAllocator *allocator, char **value);
+void jsonReadKeyLifetime(struct JsonReader *p, struct BlockAllocator *allocator,
+                         char **key);
+void jsonReadKeyTransient(struct JsonReader *p,
+                          struct ImplicitAllocator *allocator, char **key);
 
 void jsonReadArrayBegin(struct JsonReader *p);
 void jsonReadArrayEnd(struct JsonReader *p);

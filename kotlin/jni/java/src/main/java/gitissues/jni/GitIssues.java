@@ -25,4 +25,40 @@ public final class GitIssues {
   // Automatically uses the codec the user specified
   public static native void saveIssue(long registry, long issue, String filename);
   public static native long loadIssue(long registry, String filename);
+
+  public static native void saveIssues(long registry, long[] issues, String filename);
+  public static native long[] loadIssues(long registry, String filename);
+
+  private static final class PoolIterator implements java.util.Iterator<Object> {
+    // ptr is the dense map pointer 
+    private final int count;
+    private final long ptr;
+    private final long sizeOfType; // always size of jobject?
+    private int index;
+
+    private PoolIterator(long ptr, int count, long sizeOfType) {
+      this.count = count;
+      this.ptr = ptr;
+      this.sizeOfType = sizeOfType;
+      this.index = 0;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return index < count;
+    }
+
+    @Override
+    public Object next() {
+      if (!hasNext()) {
+        throw new java.util.NoSuchElementException();
+      }
+
+      return nativeNext(ptr, index++, sizeOfType);
+    }
+
+    private static native Object nativeNext(long ptr, int index, long sizeOfType);
+  }
+
+  public static native PoolIterator iteratePool(long registry, long tagID);
 }

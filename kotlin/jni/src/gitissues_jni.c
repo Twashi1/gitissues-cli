@@ -105,7 +105,7 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_issueFree(JNIEnv *env,
 
   struct Issue issueStruct = IDToIssue(issue);
 
-  freeIssue(IDToRegistry(registry), &issueStruct);
+  freeIssue(IDToRegistry(registry), issueStruct);
 }
 
 JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_getTagID(JNIEnv *env,
@@ -170,7 +170,7 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_attachTag(
 
   jobject global = (*env)->NewGlobalRef(env, data);
 
-  addTagById(registryPointer, &issue, (ComponentID)tagId, (uint8_t *)&global);
+  addTagById(registryPointer, issue, (ComponentID)tagId, (uint8_t *)&global);
 }
 
 JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_detachTag(
@@ -180,11 +180,11 @@ JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_detachTag(
   struct Registry *registryPointer = IDToRegistry(registry);
   struct Issue issue = IDToIssue(issueId);
 
-  uint8_t *tagData = getTagById(registryPointer, &issue, (ComponentID)tagId);
+  uint8_t *tagData = getTagById(registryPointer, issue, (ComponentID)tagId);
   jobject global = *(jobject *)tagData;
   jobject local = (*env)->NewLocalRef(env, global);
 
-  removeTagById(registryPointer, &issue, (ComponentID)tagId);
+  removeTagById(registryPointer, issue, (ComponentID)tagId);
 
   (*env)->DeleteGlobalRef(env, global);
 
@@ -199,7 +199,7 @@ JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_getTag(
   struct Registry *registryPointer = IDToRegistry(registry);
   struct Issue issue = IDToIssue(issueId);
 
-  uint8_t *tagData = getTagById(registryPointer, &issue, (ComponentID)tagId);
+  uint8_t *tagData = getTagById(registryPointer, issue, (ComponentID)tagId);
   jobject global = *(jobject *)tagData;
 
   return global;
@@ -286,7 +286,7 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadIssue(
     jsonReadKeyTransient(&reader, getGlobalTransientAllocator(),
                          &componentName);
     struct UmbraString umbra;
-    createUmbraStringLifetime(&umbra, componentName);
+    createUmbraStringParasitic(&umbra, componentName);
     DEBUG_ASSERT(isRegistered(registryPtr, umbra),
                  "Expected component to already be registered before decoding");
 
@@ -305,6 +305,7 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadIssue(
     DEBUG_ASSERT(info != NULL, "Need codec info to decrypt");
 
     // Length of the string starting at { and ending at }
+    // We then extract this string, and feed it to the object method
     size_t objectStringLength = jsonGetLengthMatchObject(&reader);
     size_t decodeLength =
         objectStringLength - 1; // Subtract one to remove curly braces
@@ -318,14 +319,13 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadIssue(
     memcpy(stringBuf, &reader.data[reader.pos], sizeof(char) * decodeLength);
     jstring jsonData = (*env)->NewStringUTF(env, stringBuf);
 
-    // TODO: need to read until the closing object, and find the length
     jobject object =
         (*env)->CallObjectMethod(env, info->codec, info->decode, jsonData);
     DEBUG_ASSERT(object != NULL, "Codec decode returned null object");
 
     // Add object to entity
     jobject global = (*env)->NewGlobalRef(env, object);
-    addTagById(registryPtr, &issue, id, (uint8_t *)&global);
+    addTagById(registryPtr, issue, id, (uint8_t *)&global);
 
     jsonReadObjectEnd(&reader);
 
@@ -338,4 +338,58 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadIssue(
   jsonCloseFile(&reader);
 
   return IssueToID(issue);
+}
+
+JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_iteratePool(
+    JNIEnv *env, jclass clazz, jlong registry, jlong tagId) {
+  (void)clazz;
+
+  struct Registry *registryPtr = IDToRegistry(registry);
+  struct ComponentPool *pool = getPool(registryPtr, tagId);
+
+  // TODO: cache as many of these as possible
+  jclass iteratorClass =
+      (*env)->FindClass(env, "gitissues/jni/GitIssues$PoolIterator");
+
+  if (iteratorClass == NULL) {
+    return NULL;
+  }
+
+  jmethodID constructor =
+      (*env)->GetMethodID(env, iteratorClass, "<init>", "(JIJ)V");
+
+  if (constructor == NULL) {
+    (*env)->DeleteLocalRef(env, iteratorClass);
+    return NULL;
+  }
+
+  jobject iterator = (*env)->NewObject(
+      env, iteratorClass, constructor, (jlong)(intptr_t)pool->dense.data,
+      (jint)pool->dense.size, (jlong)pool->sizeOfType);
+
+  (*env)->DeleteLocalRef(env, iteratorClass);
+
+  return iterator;
+}
+
+JNIEXPORT jobject JNICALL
+Java_gitissues_jni_GitIssues_00024PoolIterator_nativeNext(JNIEnv *env,
+                                                          jclass iterator,
+                                                          jlong ptr, jint index,
+                                                          jlong sizeOfType) {
+  (void)env;
+  uint8_t *obj = (uint8_t *)ptr + index * sizeOfType;
+  return *(jobject *)obj;
+}
+
+JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_saveIssues(
+    JNIEnv *env, jclass clazz, jlong registry, jlongArray issues,
+    jstring filename) {
+  // TODO
+}
+
+JNIEXPORT jlongArray JNICALL Java_gitissues_jni_GitIssues_loadIssues(
+    JNIEnv *env, jclass clazz, jlong registry, jstring filename);
+{
+  // TODO
 }

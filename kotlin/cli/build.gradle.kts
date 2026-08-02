@@ -11,6 +11,7 @@ repositories {
 dependencies {
     implementation(project(":bindings"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation(kotlin("stdlib"))
 }
 
 application {
