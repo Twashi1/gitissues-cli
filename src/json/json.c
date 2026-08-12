@@ -1,3 +1,4 @@
+#include "gitissues/defines.h"
 #include <ctype.h>
 #include <gitissues/allocator.h>
 #include <gitissues/json/json.h>
@@ -365,4 +366,211 @@ size_t jsonGetLengthMatchObject(struct JsonReader *p) {
 
   DEBUG_ASSERT(false, "Mismatched curlys");
   return 0;
+}
+
+struct JsonNode *jsonReadObject(struct JsonReader *p,
+                                struct ImplicitAllocator *allocator) {
+  jsonReadObjectBegin(p);
+
+  struct JsonObject object = {NULL, 0, 0};
+
+  while (jsonPeekNext(p) != '}') {
+    struct JsonPair pair = jsonReadPair(p, allocator);
+    ARRAY_APPEND(object, pair, ARRAY_GROWTH_ONE_HALF);
+
+    // if comma is next, consume it
+    jsonReadNext(p);
+  }
+
+  jsonReadObjectEnd(p);
+
+  struct JsonNode *node = allocateImplicitAllocator(
+      allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+  DEBUG_ASSERT(node != NULL, "Failed to allocate space for JsonNode");
+
+  node->data.object = object;
+  node->type = JSON_OBJECT;
+
+  return node;
+}
+
+struct JsonNode *jsonReadArray(struct JsonReader *p,
+                               struct ImplicitAllocator *allocator) {
+  jsonReadArrayBegin(p);
+
+  struct JsonArray array = {NULL, 0, 0};
+  while (jsonPeekNext(p) != ']') {
+    struct JsonNode *value = jsonReadValue(p, allocator);
+    ARRAY_APPEND(array, *value, ARRAY_GROWTH_ONE_HALF);
+    freeFastAllocationImplicitAllocator(allocator, value,
+                                        sizeof(struct JsonNode));
+
+    // if comma is next, consume it
+    jsonReadNext(p);
+  }
+
+  jsonReadArrayEnd(p);
+
+  struct JsonNode *node = allocateImplicitAllocator(
+      allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+  DEBUG_ASSERT(node != NULL, "Failed to allocate space for JsonNode");
+
+  node->data.array = array;
+  node->type = JSON_ARRAY;
+
+  return node;
+}
+
+struct JsonNode *jsonReadValue(struct JsonReader *p,
+                               struct ImplicitAllocator *allocator) {
+  char next = jsonPeekNext(p);
+
+  // Check if is a string
+  if (next == '"') {
+    char *string = NULL;
+    jsonReadStringTransient(p, allocator, &string);
+
+    struct UmbraString stringUmbra;
+    createUmbraStringParasitic(&stringUmbra, string);
+
+    struct JsonNode *node = allocateImplicitAllocator(
+        allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+    DEBUG_ASSERT(node != NULL, "Failed to allocate space for JsonNode");
+
+    node->data.string = stringUmbra;
+    node->type = JSON_STRING;
+
+    return node;
+  }
+
+  // Check if is an object
+  if (next == '{') {
+    return jsonReadObject(p, allocator);
+  }
+
+  // Check if is an array
+  if (next == '[') {
+    return jsonReadArray(p, allocator);
+  }
+
+  if (isdigit(next)) {
+    // TODO: check if we can use strtol
+    int64_t integer;
+    double floating;
+    int consumed;
+    bool wasInteger = false;
+
+    // TODO: code duplication of readInt and readFloat
+    if (sscanf(p->data + p->pos, "%lf%n", &floating, &consumed) == 1) {
+      p->pos += consumed;
+    }
+
+    else if (sscanf(p->data + p->pos, "%" SCNd64 "%n", &integer, &consumed) ==
+             1) {
+      p->pos += consumed;
+      wasInteger = true;
+    }
+
+    else {
+      DEBUG_ASSERT(false, "Failed to read number from json");
+    }
+
+    struct JsonNode *node = allocateImplicitAllocator(
+        allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+
+    if (wasInteger) {
+      node->data.integer = integer;
+      node->type = JSON_INTEGER;
+    } else {
+      node->data.floating = floating;
+      node->type = JSON_FLOAT;
+    }
+
+    return node;
+  }
+
+  // TODO: read bool function?
+  if (next == 't' || next == 'f') {
+    if (strcmp(p->data + p->pos, "true") == 0) {
+      p->pos += sizeof("true") - 1;
+
+      struct JsonNode *node = allocateImplicitAllocator(
+          allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+      node->data.boolean = 1;
+      node->type = JSON_BOOLEAN;
+
+      return node;
+    }
+
+    if (strcmp(p->data + p->pos, "false") == 0) {
+      p->pos += sizeof("false") - 1;
+
+      struct JsonNode *node = allocateImplicitAllocator(
+          allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+      node->data.boolean = 0;
+      node->type = JSON_BOOLEAN;
+      return node;
+    }
+
+    DEBUG_ASSERT(false, "Failed to read boolean from json");
+  }
+
+  DEBUG_ASSERT(false, "Failed to read any value from json");
+
+  return NULL;
+}
+
+struct JsonPair jsonReadPair(struct JsonReader *p,
+                             struct ImplicitAllocator *allocator) {
+  char *string = NULL;
+  jsonReadKeyTransient(p, allocator, &string);
+
+  struct UmbraString key;
+  createUmbraStringParasitic(&key, string);
+
+  struct JsonNode *value = jsonReadValue(p, allocator);
+
+  struct JsonPair pair;
+  pair.key = key;
+  pair.value = value;
+
+  return pair;
+}
+
+struct JsonNode *jsonReadFile(struct JsonReader *p,
+                              struct ImplicitAllocator *allocator) {
+  return jsonReadValue(p, allocator);
+}
+
+void freeJsonNode(struct JsonNode *node, struct ImplicitAllocator *allocator) {
+  switch (node->type) {
+  case JSON_OBJECT:
+    for (uint32_t i = 0; i < node->data.object.size; i++) {
+      freeJsonNode(node->data.object.data[i].value, allocator);
+    }
+
+    break;
+
+  case JSON_ARRAY:
+    for (uint32_t i = 0; i < node->data.array.size; i++) {
+      freeJsonNode(&node->data.array.data[i], allocator);
+    }
+
+    break;
+
+  case JSON_STRING:
+    freeUmbraStringTransient(&node->data.string, allocator);
+    break;
+
+  case JSON_INTEGER:
+  case JSON_FLOAT:
+  case JSON_BOOLEAN:
+    break;
+  default:
+    DEBUG_ASSERT(false, "Unknown json node type");
+    break;
+  }
+
+  // Free the node itself
+  freeFastAllocationImplicitAllocator(allocator, node, sizeof(struct JsonNode));
 }
