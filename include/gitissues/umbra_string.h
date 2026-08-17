@@ -48,7 +48,9 @@ _Static_assert(alignof(struct UmbraString) == 8 ||
 // void initUmbraString(void);
 // void terminateUmbraString(void);
 
+// TODO: functions should work on generic string ranges
 bool umbraCompare(struct UmbraString const a, struct UmbraString const b);
+bool umbraCompareString(struct UmbraString const a, char const *b);
 uint32_t umbraFirstIndexOf(struct UmbraString const string,
                            struct UmbraString const substring, uint32_t offset);
 
@@ -56,6 +58,12 @@ uint32_t umbraFirstIndexOf(struct UmbraString const string,
 void createUmbraStringParasitic(struct UmbraString *s, char const *value);
 void createUmbraStringBoundParasitic(struct UmbraString *s, char const *value,
                                      uint32_t valueLength);
+struct UmbraString createUmbraStringNull(void);
+struct UmbraString copyUmbraStringBlock(struct UmbraString const original,
+                                        struct BlockAllocator *allocator);
+struct UmbraString copyUmbraStringImplicit(struct UmbraString const original,
+                                           struct ImplicitAllocator *allocator);
+
 void createUmbraStringAllocate(struct UmbraString *s, char const *value,
                                struct BlockAllocator *allocator);
 void createUmbraStringBoundAllocate(struct UmbraString *s, char const *value,

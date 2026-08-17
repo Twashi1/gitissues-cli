@@ -48,6 +48,21 @@ bool umbraCompare(struct UmbraString const a, struct UmbraString const b) {
   return true;
 }
 
+bool umbraCompareString(struct UmbraString const a, char const *b) {
+  uint32_t length = strlen(b);
+
+  // Compare length
+  if (a.size != length) {
+    return false;
+  }
+
+  if (strncmp(a.ptr, b, length) == 0) {
+    return true;
+  }
+
+  return false;
+}
+
 uint32_t umbraFirstIndexOf(struct UmbraString const string,
                            struct UmbraString const pattern, uint32_t offset) {
   // TODO: consider more optimised methods; maybe boyer-moore
@@ -96,11 +111,64 @@ static inline bool _attemptInplaceConstruction(struct UmbraString *s,
     return false;
 
   // Construct in-place
-  for (uint32_t i = 0; i < s->size - 4; i++) {
-    s->data |= (uint64_t)value[i + 4] << (8 * i);
+  for (uint32_t i = 4; i < s->size; i++) {
+    s->data |= (uint64_t)value[i] << (8 * (i - 4));
   }
 
   return true;
+}
+
+struct UmbraString createUmbraStringNull(void) {
+  struct UmbraString string;
+  string.size = 0;
+  string.prefix = 0;
+  string.data = 0;
+  string.ptr = NULL;
+
+  return string;
+}
+
+struct UmbraString copyUmbraStringBlock(struct UmbraString const original,
+                                        struct BlockAllocator *allocator) {
+  struct UmbraString string;
+  string.size = original.size;
+  string.prefix = original.prefix;
+  string.data = original.data;
+  string.ptr = NULL;
+
+  if (original.size <= 12) {
+    return string;
+  }
+
+  string.ptr = allocateBlockAllocator(allocator, original.size * sizeof(char),
+                                      alignof(char));
+  DEBUG_ASSERT(string.ptr != NULL, "Failed to allocate for umbra string");
+
+  memcpy((char *)string.ptr, original.ptr, sizeof(char) * original.size);
+
+  return string;
+}
+
+struct UmbraString
+copyUmbraStringImplicit(struct UmbraString const original,
+                        struct ImplicitAllocator *allocator) {
+  struct UmbraString string;
+  string.size = original.size;
+  string.prefix = original.prefix;
+  string.data = original.data;
+  string.ptr = NULL;
+
+  if (original.size <= 12) {
+    return string;
+  }
+
+  string.ptr = allocateImplicitAllocator(
+      allocator, original.size * sizeof(char), alignof(char));
+  DEBUG_ASSERT(string.ptr != NULL, "Failed to allocate for umbra string");
+
+  memcpy((char *)string.ptr, original.ptr, sizeof(char) * original.size);
+
+  return string;
 }
 
 void createUmbraStringParasitic(struct UmbraString *s, char const *value) {
