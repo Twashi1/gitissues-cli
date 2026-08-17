@@ -30,6 +30,8 @@
       "binaryDir": "${sourceDir}/build/${presetName}",
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
+        "CMAKE_C_FLAGS": "-Wall -Wextra", 
+        "CMAKE_CXX_FLAGS": "-Wall -Wextra",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "BUILD_JNI": "OFF"

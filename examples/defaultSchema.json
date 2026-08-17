@@ -1,0 +1,18 @@
+{
+	"properties": {
+    "sep": "::",
+    "term": ";"
+	},
+	"tags": {
+		"project": {
+			"alias": "@",
+			"type": "string",
+			"required": false
+		},
+    "entity": {
+      "alias": "$",
+      "type": "int64",
+      "required": false
+    }
+	}
+}

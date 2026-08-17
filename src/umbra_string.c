@@ -56,7 +56,11 @@ bool umbraCompareString(struct UmbraString const a, char const *b) {
     return false;
   }
 
-  if (strncmp(a.ptr, b, length) == 0) {
+  // We don't necessarily terminate the string, but we have the same length
+  // field anyway
+  char const *aPtr = a.size <= 12 ? (char const *)&a.prefix : a.ptr;
+
+  if (strncmp(aPtr, b, length) == 0) {
     return true;
   }
 
@@ -81,7 +85,7 @@ uint32_t umbraFirstIndexOf(struct UmbraString const string,
   if (pattern.size <= 12)
     p = (uint8_t const *)(&pattern.prefix);
 
-  for (size_t i = start; i <= string.size - pattern.size; ++i) {
+  for (size_t i = start; i < (string.size - pattern.size); ++i) {
     size_t j = 0;
 
     while (j < pattern.size && s[i + j] == p[j])

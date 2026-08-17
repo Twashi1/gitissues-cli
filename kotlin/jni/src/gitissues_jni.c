@@ -389,7 +389,6 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_saveIssues(
 }
 
 JNIEXPORT jlongArray JNICALL Java_gitissues_jni_GitIssues_loadIssues(
-    JNIEnv *env, jclass clazz, jlong registry, jstring filename);
-{
+    JNIEnv *env, jclass clazz, jlong registry, jstring filename) {
   // TODO
 }

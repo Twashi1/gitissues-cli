@@ -94,6 +94,7 @@ void addEntityToComponentPool(struct ComponentPool *pool, Entity entity,
   DEBUG_ASSERT(data != NULL,
                "Failed to find slot for entity being added to sparse array");
 
+  // TODO: assumes data is move-able?
   // TODO: can abstract this out better, move to variable
   if (pool->manager.move != NULL) {
     pool->manager.move(componentData, data);

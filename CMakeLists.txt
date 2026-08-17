@@ -17,6 +17,8 @@ set(GITISSUES_SOURCES
     src/issue.c
     src/allocator.c
     src/global.c
+    src/iff/iff.c
+    src/iff/schema.c
     src/ecs/component_pool.c
     src/ecs/entity.c
     src/ecs/paged_array.c
@@ -25,6 +27,7 @@ set(GITISSUES_SOURCES
     src/tests/ecs.c
     src/tests/json.c
     src/tests/allocator.c
+    src/tests/iff.c
     src/json/json.c
 )
 
@@ -70,3 +73,10 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS)
             ${CMAKE_SOURCE_DIR}/compile_commands.json
     )
 endif()
+
+# Copy example schema/issue files to build directory
+add_custom_command(TARGET gitissues_lib POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/examples"
+        "$<TARGET_FILE_DIR:gitissues_lib>/examples"
+)

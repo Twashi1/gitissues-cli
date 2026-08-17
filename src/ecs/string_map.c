@@ -112,7 +112,8 @@ void _insertUncheckedStringMap(struct StringMap *map, struct UmbraString string,
   return;
 }
 
-ComponentID getStringMap(struct StringMap *map, struct UmbraString string) {
+ComponentID getStringMap(struct StringMap const *map,
+                         struct UmbraString string) {
   if (map->size == 0)
     return _GITISSUES_COMPONENT_INVALID;
 

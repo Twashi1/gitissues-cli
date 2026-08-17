@@ -6,6 +6,8 @@
 #include <gitissues/json/json.h>
 #include <stdint.h>
 
+// TODO: use TagID; typedef of ComponentID
+
 struct Issue {
   Entity entity;
 };

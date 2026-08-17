@@ -170,6 +170,7 @@ void jsonReadFloat(struct JsonReader *p, float *value) {
 
 void jsonReadStringLifetime(struct JsonReader *p,
                             struct BlockAllocator *allocator, char **value) {
+  // TODO: also read strings that start with single quotes
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading string");
@@ -236,6 +237,9 @@ void jsonReadStringTransient(struct JsonReader *p,
   bool escaped = false;
   uint32_t start = p->pos;
   uint32_t i;
+
+  // TODO: need to build the string character by character, so we can properly
+  // deal with escape characters.
 
   // TODO: this doesn't properly deal with \n, \t, just \\ and \" (i think)
   for (i = start; i < p->size; i++) {
@@ -453,7 +457,7 @@ struct JsonNode *jsonReadValue(struct JsonReader *p,
     return jsonReadArray(p, allocator);
   }
 
-  if (isdigit(next)) {
+  if (isdigit(next) || next == '-' || next == '.') {
     // TODO: check if we can use strtol
     int64_t integer;
     double floating;
@@ -491,7 +495,7 @@ struct JsonNode *jsonReadValue(struct JsonReader *p,
 
   // TODO: read bool function?
   if (next == 't' || next == 'f') {
-    if (strcmp(p->data + p->pos, "true") == 0) {
+    if (strncmp(p->data + p->pos, "true", strlen("true")) == 0) {
       p->pos += sizeof("true") - 1;
 
       struct JsonNode *node = allocateImplicitAllocator(
@@ -502,7 +506,7 @@ struct JsonNode *jsonReadValue(struct JsonReader *p,
       return node;
     }
 
-    if (strcmp(p->data + p->pos, "false") == 0) {
+    if (strncmp(p->data + p->pos, "false", strlen("false")) == 0) {
       p->pos += sizeof("false") - 1;
 
       struct JsonNode *node = allocateImplicitAllocator(

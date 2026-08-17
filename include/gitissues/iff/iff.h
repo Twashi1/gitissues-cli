@@ -7,10 +7,15 @@
 #include <gitissues/umbra_string.h>
 
 // Read IFF file format
-// [text] [separator symbol] [terminator symbol]
+// file: [issue]*
+// issue: [text] [separator symbol] [taglist] [terminator symbol]
+// taglist: [tag]*
+// tag: [tagname] [tagvalue]
+// tagname: alphanumeric or underscore or -
+// tagvalue: "string", int, float, boolean (true/false), date
 
 void readIFFFile(char const *filename, struct Registry *registry,
                  struct BlockAllocator *allocator, struct Issue **issues,
-                 uint32_t *issuesSize, struct Schema const schema);
+                 uint32_t *issuesSize, struct Schema *schema);
 
 #endif

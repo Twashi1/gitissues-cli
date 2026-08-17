@@ -1,6 +1,7 @@
 #include <gitissues/defines.h>
 #include <gitissues/tests/allocator.h>
 #include <gitissues/tests/ecs.h>
+#include <gitissues/tests/iff.h>
 #include <gitissues/tests/json.h>
 #include <gitissues/tests/test.h>
 #include <stdio.h>
@@ -37,6 +38,11 @@ void freeSuite(struct Suite *suite) {
 }
 
 void pushTest(struct Suite *suite, char const *name) {
+  if (suite->tests.size == 1) {
+    GITISSUES_LOG_WARN(
+        "Pushed more than one test concurrently, feature will be removed soon");
+  }
+
   if (suite->tests.size >= suite->tests.capacity) {
     uint32_t newCapacity = suite->tests.capacity * 2 + 1;
 
@@ -64,9 +70,9 @@ void testFailed(struct Suite *suite, char const *reason) {
   memset(buf, (int)'\t', depth);
 
   if (reason != NULL) {
-    printf("%s%s: %s\n", buf, testName, reason);
+    printf("%s[FAIL] %s: %s\n", buf, testName, reason);
   } else {
-    printf("%s%s\n", buf, testName);
+    printf("%s[FAIL] %s\n", buf, testName);
   }
 
   for (uint32_t i = 0; i < suite->headers.size; i++) {
@@ -89,9 +95,9 @@ void testPassed(struct Suite *suite, char const *message) {
   memset(buf, (int)'\t', depth);
 
   if (message != NULL) {
-    printf("%s%s: %s\n", buf, testName, message);
+    printf("%s[PASS] %s: %s\n", buf, testName, message);
   } else {
-    printf("%s%s\n", buf, testName);
+    printf("%s[PASS] %s\n", buf, testName);
   }
 
   for (uint32_t i = 0; i < suite->headers.size; i++) {
@@ -142,9 +148,10 @@ void popHeader(struct Suite *suite) {
 }
 
 int main(void) {
+  testAllocator();
   testECS();
   testJson();
-  testAllocator();
+  testIFF();
 
   return 0;
 }
