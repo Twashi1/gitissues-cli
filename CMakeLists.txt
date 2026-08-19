@@ -17,6 +17,7 @@ set(GITISSUES_SOURCES
     src/issue.c
     src/allocator.c
     src/global.c
+    src/log.c
     src/iff/iff.c
     src/iff/schema.c
     src/ecs/component_pool.c

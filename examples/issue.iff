@@ -1,2 +1,2 @@
-Example issue text :: @"myproject" $1;
-Second issue :: @"myproject";
+Example issue text :: @myproject $1;
+Second issue :: @myproject;

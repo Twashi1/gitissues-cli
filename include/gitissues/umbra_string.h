@@ -82,5 +82,6 @@ struct UmbraString loadUmbraString(struct BlockAllocator *allocator, FILE *p);
 
 // Not null-terminated!
 char *getUmbraPtr(struct UmbraString *s);
+char const *getUmbraPtrConst(struct UmbraString const *s);
 
 #endif

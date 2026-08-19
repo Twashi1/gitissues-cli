@@ -82,6 +82,30 @@ static void testIssue(struct IFFContext *context) {
   popHeader(&context->suite);
 
   // TODO: Check issue have correct project tag and entity tag data
+  free(issues);
+
+  issues = NULL;
+  issuesSize = 0;
+
+  pushHeader(&context->suite, "Testing bad issues");
+  pushTest(&context->suite, "Loading issue from file that doesn't fit schema");
+
+  int numErrors = getNumErrors();
+
+  readIFFFile("./examples/bad.iff", &context->registry, &context->allocator,
+              &issues, &issuesSize, &context->schema);
+
+  testPassed(&context->suite, "Bad issue loaded successfully");
+
+  pushTest(&context->suite,
+           "Error should've been invoked for invalid number of required tags");
+
+  TEST_FAIL_IF_MSG((&context->suite), numErrors == getNumErrors(),
+                   "Expected error to be invoked");
+  testPassed(&context->suite,
+             "One error invoked for invalid number of required tags");
+
+  popHeader(&context->suite);
 }
 
 static void testSchema(struct IFFContext *context) {

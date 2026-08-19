@@ -7,7 +7,7 @@
 		"project": {
 			"alias": "@",
 			"type": "string",
-			"required": false
+			"required": true 
 		},
     "entity": {
       "alias": "$",

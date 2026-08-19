@@ -38,6 +38,7 @@ struct Schema {
   // TODO: cuirrently, all aliases expected to be single characters (if we force
   // this as a feature, then use a vector instead)
   struct StringMap aliases;
+  uint32_t numRequiredTags;
 
   struct {
     struct UmbraString *data;

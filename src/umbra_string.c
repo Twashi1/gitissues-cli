@@ -278,3 +278,11 @@ char *getUmbraPtr(struct UmbraString *string) {
 
   return string->ptr;
 }
+
+char const *getUmbraPtrConst(struct UmbraString const *string) {
+  if (string->size <= 12) {
+    return (char const *)(&string->prefix);
+  }
+
+  return string->ptr;
+}

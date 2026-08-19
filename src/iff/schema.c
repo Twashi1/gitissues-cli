@@ -80,6 +80,10 @@ static void readTagMetadata(struct Schema *schema, struct JsonNode *node,
                    "Expected required to be a boolean");
       metadata.isRequired = pair.value->data.boolean;
 
+      if (metadata.isRequired) {
+        schema->numRequiredTags++;
+      }
+
       continue;
     }
 
@@ -220,6 +224,7 @@ struct Schema readSchema(char const *filename, struct Registry *registry) {
   struct Schema schema = {0};
   schema.allocator = createBlockAllocator(1024);
   schema.aliases = createStringMap();
+  schema.numRequiredTags = 0;
 
   struct JsonReader p = jsonOpenFile(filename);
   struct ImplicitAllocator allocator = createImplicitAllocator();

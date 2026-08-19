@@ -34,6 +34,40 @@ static void completeTagMetadataIfInvalid(struct Registry *registry,
   tagMeta->name = tagString;
 }
 
+static bool isTerminatorAtIndex(char const *fileContentPtr, uint32_t pos,
+                                struct Schema const *schema) {
+  return strncmp(getUmbraPtrConst(&schema->terminator), fileContentPtr + pos,
+                 schema->terminator.size) == 0;
+}
+
+static void readIFFUnquotedString(char const *fileContentPtr, uint32_t *pos,
+                                  struct BlockAllocator *allocator,
+                                  struct Issue issue, struct Registry *registry,
+                                  struct Schema const *schema,
+                                  struct TagMetadata *tagMeta,
+                                  struct UmbraString const tagString) {
+  DEBUG_ASSERT(fileContentPtr[*pos] != '"',
+               "Expected unquoted string, got quote");
+
+  uint32_t start = *pos;
+
+  // Read in until we find a whitespace or terminator
+  // TODO: also have to stop reading at terminator
+  while (!isspace(fileContentPtr[*pos]) && fileContentPtr[*pos] != '\0' &&
+         !isTerminatorAtIndex(fileContentPtr, *pos, schema)) {
+    (*pos)++;
+  }
+
+  struct UmbraString string;
+  createUmbraStringBoundAllocate(&string, fileContentPtr + start, *pos - start,
+                                 allocator);
+
+  completeTagMetadataIfInvalid(registry, tagString, tagMeta,
+                               SCHEMA_TYPE_STRING);
+
+  addTagById(registry, issue, tagMeta->tagID, (uint8_t *)&string);
+}
+
 static void readIFFString(char const *fileContentPtr, uint32_t *pos,
                           struct BlockAllocator *allocator, struct Issue issue,
                           struct Registry *registry,
@@ -186,10 +220,9 @@ static void readIFFValue(char const *fileContentPtr, uint32_t *pos,
                          struct Issue issue, struct Registry *registry,
                          struct BlockAllocator *allocator,
                          struct TagMetadata *tagMeta,
+                         struct Schema const *schema,
                          struct UmbraString const tagString) {
   // Read in either a empty, string, int, float, boolean, or date
-
-  // TODO: string has optional quotes
 
   // Look at the type of the tag (if we have it)
   if (tagMeta->tagID != _GITISSUES_COMPONENT_INVALID) {
@@ -206,8 +239,15 @@ static void readIFFValue(char const *fileContentPtr, uint32_t *pos,
     switch (tagMeta->type) {
     case SCHEMA_TYPE_STRING:
       // TODO: deal with unquoted strings
-      readIFFString(fileContentPtr, pos, allocator, issue, registry, tagMeta,
-                    tagString);
+      if (fileContentPtr[*pos] == '"') {
+
+        readIFFString(fileContentPtr, pos, allocator, issue, registry, tagMeta,
+                      tagString);
+      } else {
+        readIFFUnquotedString(fileContentPtr, pos, allocator, issue, registry,
+                              schema, tagMeta, tagString);
+      }
+
       return;
     case SCHEMA_TYPE_INT64:
       if (readIFFInt(fileContentPtr, pos, issue, registry, tagMeta, tagString))
@@ -225,7 +265,8 @@ static void readIFFValue(char const *fileContentPtr, uint32_t *pos,
       break;
     case SCHEMA_TYPE_DATE:
       // TODO: read date
-      break;
+      GITISSUES_LOG_ERROR("Unimplemented date type");
+      return;
     case SCHEMA_TYPE_EMPTY: {
       uint8_t empty = 0;
       // TODO: no official ECS support for empty components
@@ -262,20 +303,21 @@ static void readIFFValue(char const *fileContentPtr, uint32_t *pos,
     if (readIFFBoolean(fileContentPtr, pos, issue, registry, tagMeta,
                        tagString))
       return;
-
-    // TODO: read a string or fail?
   }
 
   // TODO: Read a string
   // TODO: Empty?
+
+  readIFFUnquotedString(fileContentPtr, pos, allocator, issue, registry, schema,
+                        tagMeta, tagString);
 
   NDEBUG_ASSERT(false, "Failed to read a value from IFF file");
 }
 
 static void readTag(char const *fileContentPtr, uint32_t *pos,
                     struct Issue issue, struct Schema *schema,
-                    struct Registry *registry,
-                    struct BlockAllocator *allocator) {
+                    struct Registry *registry, struct BlockAllocator *allocator,
+                    uint32_t *numRequiredTagsSeen) {
   // TODO: read the tag list, write functions to read individual tags, deal with
   // aliases, also add schema info
   // TODO: validate that required tags are present
@@ -345,7 +387,11 @@ static void readTag(char const *fileContentPtr, uint32_t *pos,
         "we have no knowledge of the type, thus cannot use this tag name");
 
     readIFFValue(fileContentPtr, pos, issue, registry, allocator, tagMeta,
-                 tagName);
+                 schema, tagName);
+
+    if (tagMeta->isRequired) {
+      (*numRequiredTagsSeen)++;
+    }
 
     return;
   }
@@ -375,7 +421,11 @@ static void readTag(char const *fileContentPtr, uint32_t *pos,
   // TODO: block allocator makes more sense? figure out which to use
   // Read value and infer the type of the tag
   readIFFValue(fileContentPtr, pos, issue, registry, allocator, &newMetadata,
-               tagName);
+               schema, tagName);
+
+  if (newMetadata.isRequired) {
+    (*numRequiredTagsSeen)++;
+  }
 
   DEBUG_ASSERT(newMetadata.tagID != _GITISSUES_COMPONENT_INVALID,
                "Expected reading value to fill in tag metadata");
@@ -390,20 +440,20 @@ static void readTagList(char const *fileContentPtr, uint32_t *pos,
   // TODO: validate that required tags are present
   skipWhitespace(fileContentPtr, pos);
 
-  while (fileContentPtr[*pos] != '\0') {
-    readTag(fileContentPtr, pos, issue, schema, registry, allocator);
+  uint32_t numRequiredTagsSeen = 0;
+
+  // If we reach EOF, or we find the terminator, we must end
+  while (fileContentPtr[*pos] != '\0' &&
+         !isTerminatorAtIndex(fileContentPtr, *pos, schema)) {
+    readTag(fileContentPtr, pos, issue, schema, registry, allocator,
+            &numRequiredTagsSeen);
     skipWhitespace(fileContentPtr, pos);
+  }
 
-    char const *termPtr = schema->terminator.ptr;
-    if (schema->terminator.size <= 12) {
-      termPtr = (char const *)(&schema->terminator.prefix);
-    }
-
-    // We expect the terminator or EOF
-    if (strncmp(termPtr, fileContentPtr + *pos, schema->terminator.size) == 0) {
-      // Got terminator, end of tag, return
-      return;
-    }
+  if (numRequiredTagsSeen != schema->numRequiredTags) {
+    GITISSUES_LOG_ERROR("Number of required tags added was %d, but we expected "
+                        "%d required tags",
+                        numRequiredTagsSeen, schema->numRequiredTags);
   }
 }
 
