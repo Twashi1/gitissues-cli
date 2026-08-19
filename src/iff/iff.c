@@ -272,10 +272,10 @@ static void readIFFValue(char const *fileContentPtr, uint32_t *pos,
   NDEBUG_ASSERT(false, "Failed to read a value from IFF file");
 }
 
-static void readTagList(char const *fileContentPtr, uint32_t *pos,
-                        struct Issue issue, struct Schema *schema,
-                        struct Registry *registry,
-                        struct BlockAllocator *allocator) {
+static void readTag(char const *fileContentPtr, uint32_t *pos,
+                    struct Issue issue, struct Schema *schema,
+                    struct Registry *registry,
+                    struct BlockAllocator *allocator) {
   // TODO: read the tag list, write functions to read individual tags, deal with
   // aliases, also add schema info
   // TODO: validate that required tags are present
@@ -381,6 +381,32 @@ static void readTagList(char const *fileContentPtr, uint32_t *pos,
                "Expected reading value to fill in tag metadata");
 }
 
+static void readTagList(char const *fileContentPtr, uint32_t *pos,
+                        struct Issue issue, struct Schema *schema,
+                        struct Registry *registry,
+                        struct BlockAllocator *allocator) {
+  // TODO: read the tag list, write functions to read individual tags, deal with
+  // aliases, also add schema info
+  // TODO: validate that required tags are present
+  skipWhitespace(fileContentPtr, pos);
+
+  while (fileContentPtr[*pos] != '\0') {
+    readTag(fileContentPtr, pos, issue, schema, registry, allocator);
+    skipWhitespace(fileContentPtr, pos);
+
+    char const *termPtr = schema->terminator.ptr;
+    if (schema->terminator.size <= 12) {
+      termPtr = (char const *)(&schema->terminator.prefix);
+    }
+
+    // We expect the terminator or EOF
+    if (strncmp(termPtr, fileContentPtr + *pos, schema->terminator.size) == 0) {
+      // Got terminator, end of tag, return
+      return;
+    }
+  }
+}
+
 void readIFFFile(char const *filename, struct Registry *registry,
                  struct BlockAllocator *allocator, struct Issue **issues,
                  uint32_t *issuesSize, struct Schema *schema) {
@@ -451,6 +477,16 @@ void readIFFFile(char const *filename, struct Registry *registry,
 
     // Get the text up to the separator
     uint32_t descriptionSize = separatorIndex - issueStart;
+
+    // Go backwards from separator index to remove whitespace
+    for (uint32_t i = separatorIndex - 1; i >= issueStart; i--) {
+      if (!isspace(fileContent[i])) {
+        break;
+      }
+
+      descriptionSize--;
+    }
+
     struct UmbraString umbraDescription;
     createUmbraStringBoundAllocate(&umbraDescription, fileContent + issueStart,
                                    descriptionSize, allocator);
@@ -479,6 +515,8 @@ void readIFFFile(char const *filename, struct Registry *registry,
     }
 
     lastIssueEnd = terminatorIndex;
+
+    ARRAY_APPEND(issueArray, issue, ARRAY_GROWTH_ONE_HALF);
   }
 
   // TODO: check all required tags are present for each issue, do it at loading

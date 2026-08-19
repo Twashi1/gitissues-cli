@@ -270,3 +270,11 @@ struct UmbraString loadUmbraString(struct BlockAllocator *allocator, FILE *p) {
 
   return string;
 }
+
+char *getUmbraPtr(struct UmbraString *string) {
+  if (string->size <= 12) {
+    return (char *)(&string->prefix);
+  }
+
+  return string->ptr;
+}

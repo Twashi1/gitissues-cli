@@ -118,8 +118,8 @@ ComponentID getComponentID(struct Registry *registry,
 void addComponent(struct Registry *registry, Entity entity, ComponentID id,
                   uint8_t *data) {
   struct ComponentPool *pool = &registry->pools.data[id];
-  GITISSUES_LOG_DEBUG("Adding component id %d; ptr: %p to entity %d", id,
-                      (void *)pool, entity);
+  // GITISSUES_LOG_DEBUG("Adding component id %d; ptr: %p to entity %d", id,
+  //                     (void *)pool, entity);
   addEntityToComponentPool(pool, entity, data);
 }
 

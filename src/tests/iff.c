@@ -43,6 +43,9 @@ static bool checkIssueDescription(struct Issue *issue,
       &context->registry, *issue, context->schema.descriptionID);
   DEBUG_ASSERT(description != NULL, "Description data must exist");
 
+  GITISSUES_LOG_DEBUG("Description: [%.*s]", description->size,
+                      getUmbraPtr(description));
+
   return umbraCompareString(*description, expected);
 }
 

@@ -12,8 +12,8 @@ void reserveIndexSparseArray(struct SparseArray *array, uint32_t index) {
   uint32_t newSize =
       page + 1; // No growth factor, we expect to rellocate infrequently
 
-  GITISSUES_LOG_DEBUG("Reserving page index %d, for index %d, new size: %d",
-                      page, index, newSize);
+  // GITISSUES_LOG_DEBUG("Reserving page index %d, for index %d, new size: %d",
+  //                     page, index, newSize);
 
   if (LIKELY(array->size >= newSize))
     return;

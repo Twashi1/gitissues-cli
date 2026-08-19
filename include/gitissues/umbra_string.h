@@ -19,7 +19,7 @@ struct UmbraString {
   uint32_t size;
   uint32_t prefix;
   union {
-    char const *ptr;
+    char *ptr;
     uint64_t data;
   };
 };
@@ -79,5 +79,8 @@ void freeUmbraStringTransient(struct UmbraString *s,
 
 void saveUmbraString(struct UmbraString const *s, FILE *p);
 struct UmbraString loadUmbraString(struct BlockAllocator *allocator, FILE *p);
+
+// Not null-terminated!
+char *getUmbraPtr(struct UmbraString *s);
 
 #endif

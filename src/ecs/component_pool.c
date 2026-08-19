@@ -75,7 +75,7 @@ uint8_t *emplaceEntityToComponentPool(struct ComponentPool *pool,
   uint32_t entityIndex = pool->dense.size; // TODO: associate version?
   addEntitySparseArray(&pool->sparse, entity, entityIndex);
 
-  GITISSUES_LOG_DEBUG("Added entity, index %d to sparse array", entityIndex);
+  // GITISSUES_LOG_DEBUG("Added entity, index %d to sparse array", entityIndex);
 
   reserveComponentPool(pool, entityIndex);
 
