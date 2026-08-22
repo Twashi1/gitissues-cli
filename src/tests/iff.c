@@ -12,7 +12,7 @@ struct TestingTagSpec {
 
 static bool checkTagSpecMatches(struct TestingTagSpec *spec,
                                 struct TagMetadata *tagMeta) {
-  if (!umbraCompareString(tagMeta->alias, spec->alias)) {
+  if (spec->alias != NULL && !umbraCompareString(tagMeta->alias, spec->alias)) {
     return false;
   }
 
@@ -35,12 +35,12 @@ static bool checkIssueDescription(struct Issue *issue,
                                   struct IFFContext *context,
                                   char const *expected) {
   TEST_FAIL_IF_MSG(&context->suite,
-                   !hasComponent(&context->registry, issue->entity,
+                   !hasComponent(&context->schema.registry, issue->entity,
                                  context->schema.descriptionID),
                    "Loaded issue must have description component");
 
   struct UmbraString *description = (struct UmbraString *)getTagById(
-      &context->registry, *issue, context->schema.descriptionID);
+      &context->schema.registry, *issue, context->schema.descriptionID);
   DEBUG_ASSERT(description != NULL, "Description data must exist");
 
   GITISSUES_LOG_DEBUG("Description: [%.*s]", description->size,
@@ -54,8 +54,12 @@ static void testIssue(struct IFFContext *context) {
   struct Issue *issues = NULL;
   uint32_t issuesSize = 0;
 
-  readIFFFile("./examples/issue.iff", &context->registry, &context->allocator,
-              &issues, &issuesSize, &context->schema);
+  readIFFFile("./examples/issue.iff", &context->allocator, &issues, &issuesSize,
+              &context->schema);
+
+  struct UmbraString dateString;
+  createUmbraStringParasitic(&dateString, "date");
+  ComponentID dateID = getComponentID(&context->schema.registry, dateString);
 
   testPassed(&context->suite, "Issue loaded successfully");
 
@@ -79,6 +83,15 @@ static void testIssue(struct IFFContext *context) {
       &context->suite,
       checkIssueDescription(&issues[1], context, "Second issue"));
 
+  pushTest(&context->suite, "Checking date loaded correctly");
+  struct SchemaDate *dateValue = (struct SchemaDate *)getComponent(
+      &context->schema.registry, issues[0].entity, dateID);
+  GITISSUES_LOG_DEBUG("Date value: %d-%d-%d", dateValue->year, dateValue->month,
+                      dateValue->day);
+  TEST_PASS_CONDITION(&context->suite, dateValue->year == 2026 &&
+                                           dateValue->month == 1 &&
+                                           dateValue->day == 1);
+
   popHeader(&context->suite);
 
   // TODO: Check issue have correct project tag and entity tag data
@@ -92,8 +105,8 @@ static void testIssue(struct IFFContext *context) {
 
   int numErrors = getNumErrors();
 
-  readIFFFile("./examples/bad.iff", &context->registry, &context->allocator,
-              &issues, &issuesSize, &context->schema);
+  readIFFFile("./examples/bad.iff", &context->allocator, &issues, &issuesSize,
+              &context->schema);
 
   testPassed(&context->suite, "Bad issue loaded successfully");
 
@@ -106,12 +119,13 @@ static void testIssue(struct IFFContext *context) {
              "One error invoked for invalid number of required tags");
 
   popHeader(&context->suite);
+
+  free(issues);
 }
 
 static void testSchema(struct IFFContext *context) {
   pushTest(&context->suite, "Loading schema from file");
-  context->schema =
-      readSchema("./examples/defaultSchema.json", &context->registry);
+  context->schema = readSchema("./examples/defaultSchema.json");
   testPassed(&context->suite, "Schema loaded successfully");
 
   pushTest(&context->suite, "Schema loaded separator/terminator correctly");
@@ -128,7 +142,7 @@ static void testSchema(struct IFFContext *context) {
 
   pushHeader(&context->suite, "Schema tag list");
 
-  uint32_t const expectedTagCount = 2;
+  uint32_t const expectedTagCount = 3;
 
   pushTest(&context->suite, "Correct number of tags loaded");
   uint32_t numValidTags = 0;
@@ -150,16 +164,16 @@ static void testSchema(struct IFFContext *context) {
   TEST_PASS_CONDITION(&context->suite, numValidTags == expectedTagCount);
 
   struct TestingTagSpec tagSpecs[] = {
-      {"@", "project", SCHEMA_TYPE_STRING, false},
-      {"$", "entity", SCHEMA_TYPE_INT64, false}};
+      {"@", "project", SCHEMA_TYPE_STRING, true},
+      {"$", "entity", SCHEMA_TYPE_INT64, false},
+      {NULL, "date", SCHEMA_TYPE_DATE, false}};
 
-  DEBUG_ASSERT(sizeof(tagSpecs) / sizeof(tagSpecs[0]) == expectedTagCount,
+  DEBUG_ASSERT(CARRAY_SIZE(tagSpecs) == expectedTagCount,
                "Mismatched tag spec count");
 
-  bool tagSpecFound[] = {false, false};
+  bool tagSpecFound[] = {false, false, false};
 
-  DEBUG_ASSERT(sizeof(tagSpecFound) / sizeof(tagSpecFound[0]) ==
-                   expectedTagCount,
+  DEBUG_ASSERT(CARRAY_SIZE(tagSpecFound) == expectedTagCount,
                "Mismatched tag spec count");
 
   for (uint32_t i = 0; i < context->schema.tagMeta.capacity; i++) {
@@ -200,7 +214,6 @@ void testIFF(void) {
   struct IFFContext context = {0};
   context.suite = createSuite("IFF");
   context.allocator = createBlockAllocator(1024);
-  context.registry = createRegistry();
 
   pushHeader(&context.suite, "Schema");
 
@@ -215,6 +228,6 @@ void testIFF(void) {
   popHeader(&context.suite);
 
   freeSuite(&context.suite);
-  freeRegistry(&context.registry);
   freeBlockAllocator(&context.allocator);
+  freeSchema(&context.schema);
 }

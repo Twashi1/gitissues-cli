@@ -29,7 +29,6 @@ uint32_t getSizeOfSchemaProperty(enum SchemaPropertyTypes type) {
 }
 
 static void readTagMetadata(struct Schema *schema, struct JsonNode *node,
-                            struct Registry *registry,
                             struct UmbraString const tagName) {
   DEBUG_ASSERT(node->type == JSON_OBJECT,
                "Expected tag metadata to be an object");
@@ -38,7 +37,7 @@ static void readTagMetadata(struct Schema *schema, struct JsonNode *node,
   metadata.tagID = _GITISSUES_COMPONENT_INVALID; // TODO: register component
   metadata.alias = createUmbraStringNull();
   metadata.defaultValue = createUmbraStringNull();
-  metadata.name = tagName;
+  metadata.name = copyUmbraStringBlock(tagName, &schema->allocator);
   metadata.isRequired = false;
   metadata.type = SCHEMA_TYPE_INVALID;
 
@@ -123,14 +122,14 @@ static void readTagMetadata(struct Schema *schema, struct JsonNode *node,
     }
   }
 
-  NDEBUG_ASSERT(!isRegistered(registry, tagName),
+  NDEBUG_ASSERT(!isRegistered(&schema->registry, tagName),
                 "Tag was already registered, duplicate within schema, or "
                 "registry has been used before");
 
   // We have a type, so we can register the tag id
   if (metadata.type != SCHEMA_TYPE_INVALID) {
     metadata.tagID = registerComponentID(
-        registry, tagName, getSizeOfSchemaProperty(metadata.type));
+        &schema->registry, tagName, getSizeOfSchemaProperty(metadata.type));
 
     GITISSUES_LOG_DEBUG(
         "Writing tag metadata to registered id at %d, should be size %d",
@@ -155,8 +154,8 @@ static void readTagMetadata(struct Schema *schema, struct JsonNode *node,
   }
 }
 
-static void readTagMetadatasSchema(struct Schema *schema, struct JsonNode *node,
-                                   struct Registry *registry) {
+static void readTagMetadatasSchema(struct Schema *schema,
+                                   struct JsonNode *node) {
   DEBUG_ASSERT(node->type == JSON_OBJECT, "Expected tags to be an object");
 
   // Expecting list of tag name: { tag properties }
@@ -169,7 +168,7 @@ static void readTagMetadatasSchema(struct Schema *schema, struct JsonNode *node,
     // TODO: use name (key of the pair) to register component
     struct UmbraString tagName = pair.key;
 
-    readTagMetadata(schema, pair.value, registry, tagName);
+    readTagMetadata(schema, pair.value, tagName);
   }
 }
 
@@ -199,8 +198,109 @@ static void readPropertiesOfSchema(struct Schema *schema,
   }
 }
 
-static void readRootOfSchema(struct Schema *schema, struct JsonNode *root,
-                             struct Registry *registry) {
+static void createDateFormatParts(struct Schema *schema,
+                                  struct UmbraString const dateFormat) {
+  for (uint32_t i = 0; i < CARRAY_SIZE(schema->dateFormatParts); i++) {
+    schema->dateFormatParts[i].part = DATE_PART_YEAR;
+    schema->dateFormatParts[i].expectedLength = 0;
+  }
+
+  char const *validSeparators = "-./";
+  char const *validParts = "YMD";
+  char const *dateFormatPtr = getUmbraPtrConst(&dateFormat);
+
+  uint32_t partIndex = 0;
+  char lastChar = '\0';
+
+  for (uint32_t i = 0; i < dateFormat.size; i++) {
+    char current = dateFormatPtr[i];
+
+    if (strchr(validSeparators, current) != NULL) {
+      ++partIndex;
+      schema->dateFormatParts[partIndex].separator = current;
+      schema->dateFormatParts[partIndex].part = DATE_PART_SEPARATOR;
+      schema->dateFormatParts[partIndex].expectedLength = 1;
+      ++partIndex;
+
+      NDEBUG_ASSERT(partIndex < 5, "Too many parts in date format");
+      NDEBUG_ASSERT(strchr(validSeparators, lastChar) == NULL,
+                    "Cannot have two separators in a row/empty date part");
+    } else if (strchr(validParts, current) != NULL) {
+      NDEBUG_ASSERT(
+          lastChar == '\0' || lastChar == current ||
+              (strchr(validSeparators, lastChar) != NULL),
+          "Invalid date format, must have separator between groups of dates, "
+          "e.g. cannot have YYYYMM, or MMDD, need YYYY-MM, or MM-DD");
+
+      switch (current) {
+      case 'Y':
+        schema->dateFormatParts[partIndex].part = DATE_PART_YEAR;
+        break;
+      case 'M':
+        schema->dateFormatParts[partIndex].part = DATE_PART_MONTH;
+        break;
+      case 'D':
+        schema->dateFormatParts[partIndex].part = DATE_PART_DAY;
+        break;
+      }
+
+      schema->dateFormatParts[partIndex].expectedLength++;
+    } else {
+      // Must not be a date, must be numbers separated by separators
+      NDEBUG_ASSERT(false,
+                    "Invalid character in date format, expect only -./ or YMD");
+    }
+
+    lastChar = current;
+  }
+
+  // Validation
+  bool partsFound[3] = {false};
+  int numValidParts = 0;
+
+  for (uint32_t i = 0; i < CARRAY_SIZE(schema->dateFormatParts); i++) {
+    if (schema->dateFormatParts[i].expectedLength == 0) {
+      continue;
+    }
+
+    if (schema->dateFormatParts[i].part != DATE_PART_SEPARATOR) {
+      ++numValidParts;
+    }
+
+    switch (schema->dateFormatParts[i].part) {
+    case DATE_PART_YEAR:
+      NDEBUG_ASSERT(schema->dateFormatParts[i].expectedLength <= 4,
+                    "Year is at most 4 digits");
+      NDEBUG_ASSERT(!partsFound[DATE_PART_YEAR],
+                    "Cannot have multiple year parts");
+      partsFound[DATE_PART_YEAR] = true;
+
+      break;
+    case DATE_PART_MONTH:
+      NDEBUG_ASSERT(schema->dateFormatParts[i].expectedLength <= 2,
+                    "Month is at most 2 digits");
+
+      NDEBUG_ASSERT(!partsFound[DATE_PART_MONTH],
+                    "Cannot have multiple month parts");
+      partsFound[DATE_PART_MONTH] = true;
+      break;
+    case DATE_PART_DAY:
+      NDEBUG_ASSERT(schema->dateFormatParts[i].expectedLength <= 2,
+                    "Day is at most 2 digits");
+
+      NDEBUG_ASSERT(!partsFound[DATE_PART_DAY],
+                    "Cannot have multiple day parts");
+      partsFound[DATE_PART_DAY] = true;
+      break;
+    case DATE_PART_SEPARATOR:
+      break;
+    }
+  }
+
+  NDEBUG_ASSERT(numValidParts >= 1, "Must have at least one part of date");
+}
+
+static void readRootOfSchema(struct Schema *schema, struct JsonNode *root) {
   DEBUG_ASSERT(root->type == JSON_OBJECT, "Expected root to be an object");
 
   for (uint32_t i = 0; i < root->data.object.size; i++) {
@@ -213,33 +313,44 @@ static void readRootOfSchema(struct Schema *schema, struct JsonNode *root,
     }
 
     if (umbraCompareString(pair.key, "tags")) {
-      readTagMetadatasSchema(schema, pair.value, registry);
+      readTagMetadatasSchema(schema, pair.value);
+    }
+
+    if (umbraCompareString(pair.key, "date_format")) {
+      DEBUG_ASSERT(pair.value->type == JSON_STRING,
+                   "Expected date_format to be a string");
+      createDateFormatParts(schema, pair.value->data.string);
     }
   }
 }
 
-struct Schema readSchema(char const *filename, struct Registry *registry) {
+struct Schema readSchema(char const *filename) {
   // schema format
   // declare separator, terminator
   struct Schema schema = {0};
   schema.allocator = createBlockAllocator(1024);
   schema.aliases = createStringMap();
   schema.numRequiredTags = 0;
+  schema.registry = createRegistry();
+
+  struct UmbraString dateFormat;
+  createUmbraStringParasitic(&dateFormat, "YYYY-MM-DD");
+  createDateFormatParts(&schema, dateFormat);
 
   struct JsonReader p = jsonOpenFile(filename);
   struct ImplicitAllocator allocator = createImplicitAllocator();
 
   struct UmbraString descriptionTag;
   createUmbraStringParasitic(&descriptionTag, "description");
-  NDEBUG_ASSERT(!isRegistered(registry, descriptionTag),
+  NDEBUG_ASSERT(!isRegistered(&schema.registry, descriptionTag),
                 "Must have 'description' component name unregistered");
 
-  schema.descriptionID =
-      registerComponentID(registry, descriptionTag, sizeof(struct UmbraString));
+  schema.descriptionID = registerComponentID(&schema.registry, descriptionTag,
+                                             sizeof(struct UmbraString));
 
   struct JsonNode *root = jsonReadFile(&p, &allocator);
 
-  readRootOfSchema(&schema, root, registry);
+  readRootOfSchema(&schema, root);
 
   freeJsonNode(root, &allocator);
 
@@ -251,7 +362,11 @@ struct Schema readSchema(char const *filename, struct Registry *registry) {
   return schema;
 }
 
-void dropSchema(struct Schema *schema) {
+void freeSchema(struct Schema *schema) {
   freeBlockAllocator(&schema->allocator);
   freeStringMap(&schema->aliases);
+
+  free(schema->aliasTagNames.data);
+  free(schema->tagMeta.data);
+  free(schema->unregisteredTagMeta.data);
 }

@@ -19,7 +19,9 @@
 // Assuming that the condition has no side-effects
 #define DEBUG_CONDITION(x) (false && (x))
 #define DEBUG_ASSERT(x, msg) ((void)0)
+#define NDEBUG_STATEMENT(x) x
 #else
+#define NDEBUG_STATEMENT(x) ((void)0)
 #define DEBUG_STATEMENT(x)                                                     \
   do {                                                                         \
     x                                                                          \
@@ -28,6 +30,7 @@
 #define DEBUG_ASSERT(x, msg) assert((x) && (msg));
 #endif
 
+#define CARRAY_SIZE(array) (sizeof(array) / sizeof(*(array)))
 #define ARRAY_GROWTH_ONE_HALF(cap) (cap + (cap >> 1) + 1)
 #define ARRAY_GROWTH_PLUS_ONE(cap) (cap + 1)
 #define ARRAY_RESERVE(array, newCap, growth)                                   \

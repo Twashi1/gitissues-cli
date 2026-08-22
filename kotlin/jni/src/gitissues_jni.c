@@ -1,5 +1,7 @@
 #include <gitissues/ecs/registry.h>
 #include <gitissues/global.h>
+#include <gitissues/iff/iff.h>
+#include <gitissues/iff/schema.h>
 #include <gitissues/issue.h>
 #include <gitissues/umbra_string.h>
 #include <jni.h>
@@ -21,6 +23,14 @@ static inline jlong IssueToID(struct Issue issue) {
   return (jlong)issue.entity;
 }
 
+static inline jlong SchemaToID(struct Schema *schema) {
+  return (jlong)(intptr_t)schema;
+}
+
+static inline jlong RegistryToID(struct Registry *registry) {
+  return (jlong)(intptr_t)registry;
+}
+
 static inline struct Issue IDToIssue(jlong id) {
   struct Issue issue;
   issue.entity = (Entity)id;
@@ -28,12 +38,12 @@ static inline struct Issue IDToIssue(jlong id) {
   return issue;
 }
 
-static inline jlong RegistryToID(struct Registry *registry) {
-  return (jlong)(intptr_t)registry;
-}
-
 static inline struct Registry *IDToRegistry(jlong id) {
   return (struct Registry *)(intptr_t)id;
+}
+
+static inline struct Schema *IDToSchema(jlong id) {
+  return (struct Schema *)(intptr_t)id;
 }
 
 static struct GitIssuesCodecInfo createCodecInfo(JNIEnv *env, jobject codec) {
@@ -54,14 +64,17 @@ static struct GitIssuesCodecInfo createCodecInfo(JNIEnv *env, jobject codec) {
 }
 
 JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_init(JNIEnv *env,
-                                                         jclass class) {
+                                                         jclass clazz) {
+  (void)env;
+  (void)clazz;
+
   createGlobalContext();
 }
 
 JNIEXPORT jlong JNICALL
-Java_gitissues_jni_GitIssues_registryCreate(JNIEnv *env, jclass class) {
+Java_gitissues_jni_GitIssues_registryCreate(JNIEnv *env, jclass clazz) {
   (void)env;
-  (void)class;
+  (void)clazz;
 
   struct Registry *regPointer =
       lifetimeAllocate(sizeof(struct Registry), alignof(struct Registry));
@@ -71,10 +84,10 @@ Java_gitissues_jni_GitIssues_registryCreate(JNIEnv *env, jclass class) {
 }
 
 JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_registryFree(JNIEnv *env,
-                                                                 jclass class,
+                                                                 jclass clazz,
                                                                  jlong handle) {
   (void)env;
-  (void)class;
+  (void)clazz;
 
   struct Registry *regPointer = IDToRegistry(handle);
 
@@ -83,6 +96,9 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_registryFree(JNIEnv *env,
 
 JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_terminate(JNIEnv *env,
                                                               jclass class) {
+  (void)env;
+  (void)class;
+
   freeGlobalContext();
 }
 
@@ -120,15 +136,14 @@ JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_getTagID(JNIEnv *env,
   DEBUG_ASSERT(charString != NULL,
                "Out of memory getting string characters in getTagID");
 
-  struct UmbraString umbra;
-  createUmbraStringTransient(&umbra, charString, getGlobalTransientAllocator());
+  // TODO: get size field
+  struct UmbraString umbra = {0};
+  createUmbraStringBoundParasitic(&umbra, charString, strlen(charString));
 
   DEBUG_ASSERT(isRegistered(registryPointer, umbra),
                "Tag was not already registered");
 
   jlong res = (jlong)getComponentID(registryPointer, umbra);
-
-  freeUmbraStringTransient(&umbra, getGlobalTransientAllocator());
 
   return res;
 }
@@ -382,13 +397,43 @@ Java_gitissues_jni_GitIssues_00024PoolIterator_nativeNext(JNIEnv *env,
   return *(jobject *)obj;
 }
 
-JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_saveIssues(
-    JNIEnv *env, jclass clazz, jlong registry, jlongArray issues,
-    jstring filename) {
+JNIEXPORT void JNICALL
+Java_gitissues_jni_GitIssues_saveIssues(JNIEnv *env, jclass clazz, jlong schema,
+                                        jlongArray issues, jstring filename) {
   // TODO
+  (void)env;
+  (void)clazz;
 }
 
 JNIEXPORT jlongArray JNICALL Java_gitissues_jni_GitIssues_loadIssues(
     JNIEnv *env, jclass clazz, jlong registry, jstring filename) {
   // TODO
+}
+
+JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadSchema(
+    JNIEnv *env, jclass clazz, jstring filename) {
+  (void)env;
+  (void)clazz;
+
+  char const *charString = (*env)->GetStringUTFChars(env, filename, NULL);
+  DEBUG_ASSERT(charString != NULL,
+               "Out of memory getting string characters in getTagID");
+
+  struct Schema *schema =
+      transientAllocate(sizeof(struct Schema), alignof(struct Schema));
+  *schema = readSchema(charString);
+
+  return SchemaToID(schema);
+}
+
+JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_freeSchema(JNIEnv *env,
+                                                               jclass clazz,
+                                                               jlong schema) {
+  (void)env;
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  freeSchema(schemaPtr);
+
+  freeTransient(schemaPtr, sizeof(struct Schema));
 }

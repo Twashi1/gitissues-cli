@@ -26,8 +26,12 @@ public final class GitIssues {
   public static native void saveIssue(long registry, long issue, String filename);
   public static native long loadIssue(long registry, String filename);
 
-  public static native void saveIssues(long registry, long[] issues, String filename);
-  public static native long[] loadIssues(long registry, String filename);
+  public static native long loadSchema(String filename);
+  public static native void freeSchema(long schema); 
+  public static native long getRegistry(long schema);
+
+  public static native void saveIssues(long schema, long[] issues, String filename);
+  public static native long[] loadIssues(long schema, String filename);
 
   private static final class PoolIterator implements java.util.Iterator<Object> {
     // ptr is the dense map pointer 

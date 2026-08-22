@@ -10,12 +10,14 @@
 // file: [issue]*
 // issue: [text] [separator symbol] [taglist] [terminator symbol]
 // taglist: [tag]*
-// tag: [tagname] [tagvalue]
+// tag: [tagname]:[tagvalue]
 // tagname: alphanumeric or underscore or -
 // tagvalue: "string", int, float, boolean (true/false), date
 
-void readIFFFile(char const *filename, struct Registry *registry,
-                 struct BlockAllocator *allocator, struct Issue **issues,
-                 uint32_t *issuesSize, struct Schema *schema);
+void readIFFFile(char const *filename, struct BlockAllocator *allocator,
+                 struct Issue **issues, uint32_t *issuesSize,
+                 struct Schema *schema);
+void writeIFFFile(char const *filename, struct Issue const *issues,
+                  uint32_t issuesSize, struct Schema const *schema);
 
 #endif

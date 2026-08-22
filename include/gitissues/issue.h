@@ -31,6 +31,8 @@ uint8_t *getTagByName(struct Registry *registry, struct Issue issue,
                       struct UmbraString tag);
 uint8_t *getTagById(struct Registry *registry, struct Issue issue,
                     ComponentID id);
+uint8_t const *getTagByIdConst(struct Registry const *registry,
+                               struct Issue issue, ComponentID id);
 
 void jsonSaveIssues(struct Registry *registry, struct Issue *issues,
                     uint32_t count, char const *filename);

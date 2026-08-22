@@ -8,7 +8,6 @@ struct IFFContext {
   struct Suite suite;
   struct BlockAllocator allocator;
   struct Schema schema;
-  struct Registry registry;
 };
 
 void testIFF(void);

@@ -65,9 +65,12 @@ void addComponent(struct Registry *registry, Entity entity, ComponentID id,
                   uint8_t *data);
 void removeComponent(struct Registry *registry, Entity entity, ComponentID id);
 uint8_t *getComponent(struct Registry *registry, Entity entity, ComponentID id);
+uint8_t const *getComponentConst(struct Registry const *registry, Entity entity,
+                                 ComponentID id);
 uint8_t *getOrNullComponent(struct Registry *registry, Entity entity,
                             ComponentID id);
-bool hasComponent(struct Registry *registry, Entity entity, ComponentID id);
+bool hasComponent(struct Registry const *registry, Entity entity,
+                  ComponentID id);
 struct ComponentPool *getPool(struct Registry *registry, ComponentID id);
 
 void setUserData(struct Registry *registry, ComponentID id, void *userData);

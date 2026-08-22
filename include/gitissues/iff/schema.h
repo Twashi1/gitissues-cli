@@ -15,6 +15,22 @@ enum SchemaPropertyTypes {
   SCHEMA_TYPE_INVALID,
 };
 
+// Given a date format string, can be any sort of
+// YYYY-MM-DD, DD-MM, DD-MM-YYYY, or YYYY-MM-DD
+// or Y-M-D D-M, etc.
+enum DatePart {
+  DATE_PART_YEAR,
+  DATE_PART_MONTH,
+  DATE_PART_DAY,
+  DATE_PART_SEPARATOR
+};
+
+struct DateFormatPart {
+  enum DatePart part;
+  int8_t expectedLength;
+  char separator;
+};
+
 struct SchemaDate {
   uint32_t year;
   uint32_t month;
@@ -34,10 +50,12 @@ struct Schema {
   struct BlockAllocator allocator;
   struct UmbraString separator;
   struct UmbraString terminator;
+  struct DateFormatPart dateFormatParts[5];
   // Map symbol -> index into aliasTagNames
-  // TODO: cuirrently, all aliases expected to be single characters (if we force
+  // TODO: currently, all aliases expected to be single characters (if we force
   // this as a feature, then use a vector instead)
   struct StringMap aliases;
+  struct Registry registry;
   uint32_t numRequiredTags;
 
   struct {
@@ -63,6 +81,6 @@ struct Schema {
 
 uint32_t getSizeOfSchemaProperty(enum SchemaPropertyTypes type);
 
-struct Schema readSchema(char const *filename, struct Registry *registry);
-void dropSchema(struct Schema *schema);
+struct Schema readSchema(char const *filename);
+void freeSchema(struct Schema *schema);
 #endif

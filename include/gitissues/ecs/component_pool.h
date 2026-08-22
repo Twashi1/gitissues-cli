@@ -58,9 +58,12 @@ void reloadEntityJsonComponentPool(struct ComponentPool *pool, Entity entity,
 void addEntityJsonComponentPool(struct ComponentPool *pool, Entity entity,
                                 struct JsonReader *p);
 uint8_t *getEntityComponentPool(struct ComponentPool *pool, Entity entity);
+uint8_t const *getEntityComponentPoolConst(struct ComponentPool const *pool,
+                                           Entity entity);
 uint8_t *getOrNullEntityComponentPool(struct ComponentPool *pool,
                                       Entity entity);
-bool containsEntityComponentPool(struct ComponentPool *pool, Entity entity);
+bool containsEntityComponentPool(struct ComponentPool const *pool,
+                                 Entity entity);
 void freeComponentPool(struct ComponentPool *pool);
 
 void saveComponentPool(struct ComponentPool const *pool, FILE *p);

@@ -54,6 +54,11 @@ uint8_t *getTagById(struct Registry *registry, struct Issue issue,
   return getComponent(registry, issue.entity, id);
 }
 
+uint8_t const *getTagByIdConst(struct Registry const *registry,
+                               struct Issue issue, ComponentID id) {
+  return getComponentConst(registry, issue.entity, id);
+}
+
 void jsonSaveIssues(struct Registry *registry, struct Issue *issues,
                     uint32_t count, char const *filename) {
   DEBUG_ASSERT(issues != NULL, "Passed null issues to save");

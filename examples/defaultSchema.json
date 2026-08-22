@@ -1,7 +1,8 @@
 {
 	"properties": {
     "sep": "::",
-    "term": ";"
+    "term": ";",
+    "date_format": "DD-MM-YYYY"
 	},
 	"tags": {
 		"project": {
@@ -12,6 +13,10 @@
     "entity": {
       "alias": "$",
       "type": "int64",
+      "required": false
+    },
+    "date": {
+      "type": "date",
       "required": false
     }
 	}

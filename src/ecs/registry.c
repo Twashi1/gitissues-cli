@@ -82,7 +82,8 @@ bool isRegistered(struct Registry *registry, struct UmbraString string) {
 ComponentID registerComponentID(struct Registry *registry,
                                 struct UmbraString const string,
                                 uint32_t sizeOfType) {
-  GITISSUES_LOG_DEBUG("Registering component with prefix %.4s", &string.prefix);
+  GITISSUES_LOG_DEBUG("Registering component with name %.*s", string.size,
+                      getUmbraPtrConst(&string));
   ComponentID id = getStringMap(&registry->componentIDMap, string);
 
   if (id == _GITISSUES_COMPONENT_INVALID) {
@@ -128,8 +129,9 @@ void removeComponent(struct Registry *registry, Entity entity, ComponentID id) {
   freeEntityComponentPool(pool, entity);
 }
 
-bool hasComponent(struct Registry *registry, Entity entity, ComponentID id) {
-  struct ComponentPool *pool = &registry->pools.data[id];
+bool hasComponent(struct Registry const *registry, Entity entity,
+                  ComponentID id) {
+  struct ComponentPool const *pool = &registry->pools.data[id];
   return containsEntityComponentPool(pool, entity);
 }
 
@@ -137,6 +139,12 @@ uint8_t *getComponent(struct Registry *registry, Entity entity,
                       ComponentID id) {
   struct ComponentPool *pool = &registry->pools.data[id];
   return getEntityComponentPool(pool, entity);
+}
+
+uint8_t const *getComponentConst(struct Registry const *registry, Entity entity,
+                                 ComponentID id) {
+  struct ComponentPool const *pool = &registry->pools.data[id];
+  return getEntityComponentPoolConst(pool, entity);
 }
 
 uint8_t *getOrNullComponent(struct Registry *registry, Entity entity,

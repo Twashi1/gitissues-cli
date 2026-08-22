@@ -207,6 +207,14 @@ uint8_t *getEntityComponentPool(struct ComponentPool *pool, Entity entity) {
   return &pool->dense.data[denseIndex * pool->sizeOfType];
 }
 
+uint8_t const *getEntityComponentPoolConst(struct ComponentPool const *pool,
+                                           Entity entity) {
+  uint32_t denseIndex = getIndexSparseArray(&pool->sparse, entity);
+  DEBUG_ASSERT(denseIndex != UINT32_MAX, "Entity not in sparse array");
+
+  return &pool->dense.data[denseIndex * pool->sizeOfType];
+}
+
 uint8_t *getOrNullEntityComponentPool(struct ComponentPool *pool,
                                       Entity entity) {
   // Get index from sparse array
@@ -217,7 +225,8 @@ uint8_t *getOrNullEntityComponentPool(struct ComponentPool *pool,
   return &pool->dense.data[denseIndex * pool->sizeOfType];
 }
 
-bool containsEntityComponentPool(struct ComponentPool *pool, Entity entity) {
+bool containsEntityComponentPool(struct ComponentPool const *pool,
+                                 Entity entity) {
   return containsEntitySparseArray(&pool->sparse, entity);
 }
 
