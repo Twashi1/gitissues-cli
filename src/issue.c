@@ -18,7 +18,6 @@ void freeIssue(struct Registry *registry, struct Issue issue) {
 
 ComponentID registerTag(struct Registry *registry, struct UmbraString const tag,
                         uint32_t sizeOfType) {
-  // TODO: confirm not already registered
   return registerComponentID(registry, tag, sizeOfType);
 }
 

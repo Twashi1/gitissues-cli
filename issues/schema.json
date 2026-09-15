@@ -2,7 +2,7 @@
 	"properties": {
     "sep": "::",
     "term": ";",
-    "date_format": "DD-MM-YYYY"
+    "date_format": "DD-MM-YY"
 	},
 	"tags": {
 		"project": {

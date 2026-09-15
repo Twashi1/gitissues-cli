@@ -30,6 +30,7 @@ set(GITISSUES_SOURCES
     src/tests/allocator.c
     src/tests/iff.c
     src/json/json.c
+    src/api/api.c
 )
 
 add_library(gitissues_lib ${GITISSUES_SOURCES})

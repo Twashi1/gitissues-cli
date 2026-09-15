@@ -27,12 +27,16 @@ static void completeTagMetadataIfInvalid(struct Registry *registry,
   DEBUG_ASSERT(!isRegistered(registry, tagString),
                "Expected tag to be unregistered");
 
-  ComponentID tagID =
-      registerComponentID(registry, tagString, getSizeOfSchemaProperty(type));
+  // TODO: attaching lifetime to registry is a hack
+  struct UmbraString ownedTagString =
+      copyUmbraStringBlock(tagString, &registry->lifetimeAllocations);
+
+  ComponentID tagID = registerComponentID(registry, ownedTagString,
+                                          getSizeOfSchemaProperty(type));
 
   tagMeta->tagID = tagID;
   tagMeta->type = type;
-  tagMeta->name = tagString;
+  tagMeta->name = ownedTagString;
 }
 
 static bool isTerminatorAtIndex(char const *fileContentPtr, uint32_t pos,

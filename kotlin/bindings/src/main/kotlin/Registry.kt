@@ -2,6 +2,7 @@ package gitissues
 
 class Registry internal constructor(
     internal val handle: Long,
+    internal val schema: Long,
 ) : AutoCloseable {
     fun createIssue(): Issue =
         Issue(
@@ -21,10 +22,12 @@ class Registry internal constructor(
             ),
         )
 
-    fun getTagID(name: String): Long =
-        gitissues.jni.GitIssues.getTagID(
-            handle,
-            name,
+    fun <T> getTagObject(name: String): Tag<T> =
+        Tag(
+            gitissues.jni.GitIssues.getTagID(
+                handle,
+                name,
+            ),
         )
 
     fun loadIssue(filename: String): Issue {
@@ -38,6 +41,23 @@ class Registry internal constructor(
             this,
             issue,
         )
+    }
+
+    fun saveAllIssues(filename: String): Nothing {
+        gitissues.jni.GitIssues.saveAllIssues(
+            handle,
+            filename,
+        )
+    }
+
+    fun loadAllIssues(filename: String): List<Issue> {
+        val issues =
+            gitissues.jni.GitIssues.loadAllIssues(
+                handle,
+                filename,
+            )
+
+        return issues.map { Issue(this, it) }
     }
 
     override fun close() {
