@@ -5,3 +5,6 @@
 build
 
 .kotlin
+
+# Ignore jni build output directory
+jni/build/

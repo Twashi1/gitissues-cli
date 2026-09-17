@@ -4,3 +4,5 @@ build/
 compile_commands.json
 kotlin/build/
 kotlin/bindings/build/
+kotlin/jni/build/
+generated_headers/

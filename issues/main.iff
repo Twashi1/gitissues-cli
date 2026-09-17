@@ -10,3 +10,4 @@ Get list of all issues stored in a file :: @bindings #todo created:15-09-26
 Save an entire list of issues to a file :: @bindings #todo created:15-09-26
 Rename freeTransient, transientAllocate, lifetimeAllocate to specify they are globals :: @refactor #todo created:15-09-26
 Performing many loads/saves of IFF files will cause global memory leak; related to lifetime of umbra strings :: @core #todo created:15-09-26
+Getting the size of a tag function, ideally in API too :: @core #todo created:16-09-26

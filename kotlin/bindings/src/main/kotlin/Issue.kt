@@ -1,49 +1,73 @@
 package gitissues
 
 class Issue internal constructor(
-    private val registry: Registry,
+    private val schema: Schema,
     internal val handle: Long,
-) : AutoCloseable {
-    fun <T> attachTag(
-        tag: Tag<T>,
-        value: T,
-    ) {
+) {
+
+    fun attachTag(tagName: String, data: ByteArray) {
         gitissues.jni.GitIssues.attachTag(
-            registry.handle,
+            schema.handle,
             handle,
-            tag.id,
-            value,
+            tagName,
+            data
         )
     }
 
-    @Suppress("UNCHECKED_CAST")
-    fun <T> getTag(tag: Tag<T>): T? =
-        gitissues.jni.GitIssues.getTag(
-            registry.handle,
+    fun attachTagByID(tagID: Long, data: ByteArray) {
+        gitissues.jni.GitIssues.attachTagByID(
+            schema.handle,
             handle,
-            tag.id,
-        ) as T?
+            tagID,
+            data
+        )
+    }
 
-    @Suppress("UNCHECKED_CAST")
-    fun <T> detachTag(tag: Tag<T>): T? =
+    fun <T> getTag(tagName: String): T? {
+        val data = gitissues.jni.GitIssues.getTag(
+            schema.handle,
+            handle,
+            tagName
+        )
+        return if (data == null) null else data as T?
+    }
+
+    fun <T> getTagByID(tagID: Long): T? {
+        val data = gitissues.jni.GitIssues.getTagByID(
+            schema.handle,
+            handle,
+            tagID
+        )
+        return if (data == null) null else data as T?
+    }
+
+    fun hasTag(tagName: String): Boolean =
+        gitissues.jni.GitIssues.hasTag(
+            schema.handle,
+            handle,
+            tagName
+        )
+
+    fun hasTagByID(tagID: Long): Boolean =
+        gitissues.jni.GitIssues.hasTagByID(
+            schema.handle,
+            handle,
+            tagID
+        )
+
+    fun detachTag(tagName: String) {
         gitissues.jni.GitIssues.detachTag(
-            registry.handle,
+            schema.handle,
             handle,
-            tag.id,
-        ) as T?
-
-    fun save(filename: String) {
-        gitissues.jni.GitIssues.saveIssue(
-            registry.handle,
-            handle,
-            filename,
+            tagName
         )
     }
 
-    override fun close() {
-        gitissues.jni.GitIssues.issueFree(
-            registry.handle,
+    fun detachTagByID(tagID: Long) {
+        gitissues.jni.GitIssues.detachTagByID(
+            schema.handle,
             handle,
+            tagID
         )
     }
 }

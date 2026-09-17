@@ -23,5 +23,4 @@ dependencyResolutionManagement {
 include(
     "jni",
     "bindings",
-    "cli",
 )

@@ -11,14 +11,6 @@ java {
     }
 }
 
-sourceSets {
-    main {
-        java {
-            srcDir("java/src/main/java")
-        }
-    }
-}
-
 tasks.compileJava {
     options.compilerArgs.addAll(
         listOf(

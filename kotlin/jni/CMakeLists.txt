@@ -4,7 +4,7 @@ find_package(Java REQUIRED COMPONENTS Development)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(JNI_HEADER_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build/generated)
-set(JNI_STUB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/java/src/main/java/gitissues/jni/GitIssues.java ${CMAKE_CURRENT_SOURCE_DIR}/java/src/main/java/gitissues/jni/GitIssuesCodec.java)
+set(JNI_STUB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/main/java/gitissues/jni/GitIssues.java)
 
 add_custom_command(
   OUTPUT

@@ -1,3 +1,4 @@
+#include <gitissues/api/api.h>
 #include <gitissues/ecs/registry.h>
 #include <gitissues/global.h>
 #include <gitissues/iff/iff.h>
@@ -6,20 +7,19 @@
 #include <gitissues/umbra_string.h>
 #include <jni.h>
 
-struct GitIssuesCodecInfo {
-  jobject codec;
-  jclass clazz;
-  // Cached fields
-  jmethodID encode;
-  jmethodID decode;
-};
-
 _Static_assert(sizeof(jlong) >= sizeof(intptr_t),
                "jlong must be at least as large as intptr_t");
+_Static_assert(sizeof(jlong) >= sizeof(struct Issue),
+               "jlong must be at least as large as an issue struct");
+
+// Cache for frequently used class and method IDs
+static jclass arrayListClass = NULL;
+static jmethodID arrayListConstructor = NULL;
+static jmethodID arrayListAddMethod = NULL;
+static jclass longClass = NULL;
+static jmethodID longValueOfMethod = NULL;
 
 static inline jlong IssueToID(struct Issue issue) {
-  _Static_assert(sizeof(jlong) >= sizeof(struct Issue),
-                 "jlong must be at least as large as an issue struct");
   return (jlong)issue.entity;
 }
 
@@ -46,21 +46,16 @@ static inline struct Schema *IDToSchema(jlong id) {
   return (struct Schema *)(intptr_t)id;
 }
 
-static struct GitIssuesCodecInfo createCodecInfo(JNIEnv *env, jobject codec) {
-  jclass clazz = (*env)->GetObjectClass(env, codec);
+// Initialize cached class and method IDs
+static void cacheIds(JNIEnv *env) {
+  // Cache ArrayList class and methods
+  arrayListClass = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "java/util/ArrayList"));
+  arrayListConstructor = (*env)->GetMethodID(env, arrayListClass, "<init>", "()V");
+  arrayListAddMethod = (*env)->GetMethodID(env, arrayListClass, "add", "(Ljava/lang/Object;)Z");
 
-  struct GitIssuesCodecInfo info = {0};
-
-  info.codec = (*env)->NewGlobalRef(env, codec);
-  info.clazz = (*env)->NewGlobalRef(env, clazz);
-
-  info.encode = (*env)->GetMethodID(env, clazz, "encode",
-                                    "(Ljava/lang/Object;)Ljava/lang/String;");
-
-  info.decode = (*env)->GetMethodID(env, clazz, "decode",
-                                    "(Ljava/lang/String;)Ljava/lang/Object;");
-
-  return info;
+  // Cache Long class and methods
+  longClass = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "java/lang/Long"));
+  longValueOfMethod = (*env)->GetStaticMethodID(env, longClass, "valueOf", "(J)Ljava/lang/Long;");
 }
 
 JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_init(JNIEnv *env,
@@ -68,30 +63,9 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_init(JNIEnv *env,
   (void)env;
   (void)clazz;
 
-  createGlobalContext();
-}
-
-JNIEXPORT jlong JNICALL
-Java_gitissues_jni_GitIssues_registryCreate(JNIEnv *env, jclass clazz) {
-  (void)env;
-  (void)clazz;
-
-  struct Registry *regPointer =
-      lifetimeAllocate(sizeof(struct Registry), alignof(struct Registry));
-  *regPointer = createRegistry();
-
-  return RegistryToID(regPointer);
-}
-
-JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_registryFree(JNIEnv *env,
-                                                                 jclass clazz,
-                                                                 jlong handle) {
-  (void)env;
-  (void)clazz;
-
-  struct Registry *regPointer = IDToRegistry(handle);
-
-  freeRegistry(regPointer);
+  gitissuesInit();
+  // Cache frequently used class and method IDs
+  cacheIds(env);
 }
 
 JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_terminate(JNIEnv *env,
@@ -99,329 +73,24 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_terminate(JNIEnv *env,
   (void)env;
   (void)class;
 
-  freeGlobalContext();
+  gitissuesTerminate();
 }
 
-JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_issueCreate(
-    JNIEnv *env, jclass class, jlong registry) {
-  (void)env;
-  (void)class;
-
-  struct Issue issue = createIssue(IDToRegistry(registry));
-
-  return IssueToID(issue);
-}
-
-JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_issueFree(JNIEnv *env,
-                                                              jclass class,
-                                                              jlong registry,
-                                                              jlong issue) {
-  (void)env;
-  (void)class;
-
-  struct Issue issueStruct = IDToIssue(issue);
-
-  freeIssue(IDToRegistry(registry), issueStruct);
-}
-
-JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_getTagID(JNIEnv *env,
-                                                              jclass class,
-                                                              jlong registry,
-                                                              jstring string) {
-  (void)class;
-
-  struct Registry *registryPointer = IDToRegistry(registry);
-
-  char const *charString = (*env)->GetStringUTFChars(env, string, NULL);
-  DEBUG_ASSERT(charString != NULL,
-               "Out of memory getting string characters in getTagID");
-
-  // TODO: get size field
-  struct UmbraString umbra = {0};
-  createUmbraStringBoundParasitic(&umbra, charString, strlen(charString));
-
-  DEBUG_ASSERT(isRegistered(registryPointer, umbra),
-               "Tag was not already registered");
-
-  jlong res = (jlong)getComponentID(registryPointer, umbra);
-
-  return res;
-}
-
-JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_registerTag(
-    JNIEnv *env, jclass class, jlong registry, jstring string, jobject codec) {
-  (void)class;
-
-  struct Registry *registryPointer = (struct Registry *)registry;
-
-  // TODO: should be lifetime attached to registry if possible
-  struct GitIssuesCodecInfo *infoPtr = lifetimeAllocate(
-      sizeof(struct GitIssuesCodecInfo), alignof(struct GitIssuesCodecInfo));
-  *infoPtr = createCodecInfo(env, codec);
-
-  char const *charString = (*env)->GetStringUTFChars(env, string, NULL);
-  DEBUG_ASSERT(charString != NULL,
-               "Out of memory getting string characters in registerTag");
-
-  // Attach to lifetime of registry
-  struct UmbraString umbra;
-  createUmbraStringAllocate(&umbra, charString,
-                            &registryPointer->lifetimeAllocations);
-
-  ComponentID id = registerTag(registryPointer, umbra, sizeof(jobject));
-
-  setUserData(registryPointer, id, infoPtr);
-
-  (*env)->ReleaseStringUTFChars(env, string, charString);
-}
-
-JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_attachTag(
-    JNIEnv *env, jclass class, jlong registry, jlong issueId, jlong tagId,
-    jobject data) {
-  (void)class;
-
-  struct Registry *registryPointer = IDToRegistry(registry);
-  struct Issue issue = IDToIssue(issueId);
-
-  jobject global = (*env)->NewGlobalRef(env, data);
-
-  addTagById(registryPointer, issue, (ComponentID)tagId, (uint8_t *)&global);
-}
-
-JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_detachTag(
-    JNIEnv *env, jclass class, jlong registry, jlong issueId, jlong tagId) {
-  (void)class;
-
-  struct Registry *registryPointer = IDToRegistry(registry);
-  struct Issue issue = IDToIssue(issueId);
-
-  uint8_t *tagData = getTagById(registryPointer, issue, (ComponentID)tagId);
-  jobject global = *(jobject *)tagData;
-  jobject local = (*env)->NewLocalRef(env, global);
-
-  removeTagById(registryPointer, issue, (ComponentID)tagId);
-
-  (*env)->DeleteGlobalRef(env, global);
-
-  return local;
-}
-
-JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_getTag(
-    JNIEnv *env, jclass class, jlong registry, jlong issueId, jlong tagId) {
-  (void)env;
-  (void)class;
-
-  struct Registry *registryPointer = IDToRegistry(registry);
-  struct Issue issue = IDToIssue(issueId);
-
-  uint8_t *tagData = getTagById(registryPointer, issue, (ComponentID)tagId);
-  jobject global = *(jobject *)tagData;
-
-  return global;
-}
-
-JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_saveIssue(
-    JNIEnv *env, jclass class, jlong registry, jlong issueId,
-    jstring filename) {
-  (void)class;
-
-  // TODO: repeating code for saving/loading entity json
-  struct Registry *registryPtr = IDToRegistry(registry);
-  struct Issue issue = IDToIssue(issueId);
-
-  // Open up file to save issue into
-  char const *filenameCstring = (*env)->GetStringUTFChars(env, filename, NULL);
-
-  FILE *p = fopen(filenameCstring, "w");
-  DEBUG_ASSERT(p != NULL, "Failed to open file");
-  (*env)->ReleaseStringUTFChars(env, filename, filenameCstring);
-
-  jsonWriteObjectBegin(p);
-  bool first = true;
-
-  // Iterate pools to find each component
-  for (uint32_t i = 0; i < registryPtr->pools.size; i++) {
-    struct ComponentPool *pool = &registryPtr->pools.data[i];
-
-    if (!hasComponent(registryPtr, issue.entity, (ComponentID)i)) {
-      continue;
-    }
-
-    uint8_t *tagData = getEntityComponentPool(pool, issue.entity);
-    struct GitIssuesCodecInfo *info = getUserDataComponentPool(pool);
-    jobject global = *(jobject *)tagData;
-
-    jstring codecString =
-        (*env)->CallObjectMethod(env, info->codec, info->encode, global);
-    DEBUG_ASSERT(codecString != NULL, "Codec encode returned null string");
-
-    char const *codecCstring =
-        (*env)->GetStringUTFChars(env, codecString, NULL);
-
-    if (!first) {
-      jsonWriteNext(p);
-      first = false;
-    }
-
-    struct UmbraString componentName =
-        registryPtr->componentIDMap.dense.data[i].string;
-    jsonWriteKeyUmbra(componentName, p);
-
-    jsonWriteObjectBegin(p);
-
-    fwrite(codecCstring, sizeof(char),
-           (*env)->GetStringUTFLength(env, codecString), p);
-
-    jsonWriteObjectEnd(p);
-
-    (*env)->ReleaseStringUTFChars(env, codecString, codecCstring);
-  }
-
-  jsonWriteObjectEnd(p);
-
-  fclose(p);
-}
-
-JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadIssue(
-    JNIEnv *env, jclass class, jlong registry, jstring filename) {
-  (void)class;
-
-  struct Registry *registryPtr = IDToRegistry(registry);
-  struct Issue issue = createIssue(registryPtr);
-
-  char const *filenameCstring = (*env)->GetStringUTFChars(env, filename, NULL);
-
-  struct JsonReader reader = jsonOpenFile(filenameCstring);
-  (*env)->ReleaseStringUTFChars(env, filename, filenameCstring);
-
-  jsonReadObjectBegin(&reader);
-
-  do {
-    char *componentName;
-    jsonReadKeyTransient(&reader, getGlobalTransientAllocator(),
-                         &componentName);
-    struct UmbraString umbra;
-    createUmbraStringParasitic(&umbra, componentName);
-    DEBUG_ASSERT(isRegistered(registryPtr, umbra),
-                 "Expected component to already be registered before decoding");
-
-    ComponentID id = getComponentID(registryPtr, umbra);
-
-    freeTransient(componentName, 0);
-    // Given component name
-    // - find component id
-    // - check registered
-    // - get codec
-    // - use codec method to construct
-    // - attach to the entity (would be nicer in-place, but whatever)
-    // - return issue
-
-    struct GitIssuesCodecInfo *info = getUserData(registryPtr, id);
-    DEBUG_ASSERT(info != NULL, "Need codec info to decrypt");
-
-    // Length of the string starting at { and ending at }
-    // We then extract this string, and feed it to the object method
-    size_t objectStringLength = jsonGetLengthMatchObject(&reader);
-    size_t decodeLength =
-        objectStringLength - 1; // Subtract one to remove curly braces
-    char *stringBuf =
-        transientAllocate((decodeLength + 1) * sizeof(char),
-                          alignof(char)); // But add one for null-terminator
-    stringBuf[decodeLength] = '\0';
-
-    jsonReadObjectBegin(&reader);
-
-    memcpy(stringBuf, &reader.data[reader.pos], sizeof(char) * decodeLength);
-    jstring jsonData = (*env)->NewStringUTF(env, stringBuf);
-
-    jobject object =
-        (*env)->CallObjectMethod(env, info->codec, info->decode, jsonData);
-    DEBUG_ASSERT(object != NULL, "Codec decode returned null object");
-
-    // Add object to entity
-    jobject global = (*env)->NewGlobalRef(env, object);
-    addTagById(registryPtr, issue, id, (uint8_t *)&global);
-
-    jsonReadObjectEnd(&reader);
-
-    freeTransient(stringBuf, (decodeLength + 1) * sizeof(char));
-
-  } while (jsonReadNext(&reader));
-
-  jsonReadObjectEnd(&reader);
-
-  jsonCloseFile(&reader);
-
-  return IssueToID(issue);
-}
-
-JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_iteratePool(
-    JNIEnv *env, jclass clazz, jlong registry, jlong tagId) {
-  (void)clazz;
-
-  struct Registry *registryPtr = IDToRegistry(registry);
-  struct ComponentPool *pool = getPool(registryPtr, tagId);
-
-  // TODO: cache as many of these as possible
-  jclass iteratorClass =
-      (*env)->FindClass(env, "gitissues/jni/GitIssues$PoolIterator");
-
-  if (iteratorClass == NULL) {
-    return NULL;
-  }
-
-  jmethodID constructor =
-      (*env)->GetMethodID(env, iteratorClass, "<init>", "(JIJ)V");
-
-  if (constructor == NULL) {
-    (*env)->DeleteLocalRef(env, iteratorClass);
-    return NULL;
-  }
-
-  jobject iterator = (*env)->NewObject(
-      env, iteratorClass, constructor, (jlong)(intptr_t)pool->dense.data,
-      (jint)pool->dense.size, (jlong)pool->sizeOfType);
-
-  (*env)->DeleteLocalRef(env, iteratorClass);
-
-  return iterator;
-}
-
-JNIEXPORT jobject JNICALL
-Java_gitissues_jni_GitIssues_00024PoolIterator_nativeNext(JNIEnv *env,
-                                                          jclass iterator,
-                                                          jlong ptr, jint index,
-                                                          jlong sizeOfType) {
-  (void)env;
-  uint8_t *obj = (uint8_t *)ptr + index * sizeOfType;
-  return *(jobject *)obj;
-}
-
-JNIEXPORT void JNICALL
-Java_gitissues_jni_GitIssues_saveIssues(JNIEnv *env, jclass clazz, jlong schema,
-                                        jlongArray issues, jstring filename) {
-  // TODO
-  (void)env;
-  (void)clazz;
-}
-
-JNIEXPORT jlongArray JNICALL Java_gitissues_jni_GitIssues_loadIssues(
-    JNIEnv *env, jclass clazz, jlong registry, jstring filename) {
-  // TODO
-}
-
-JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadSchema(
-    JNIEnv *env, jclass clazz, jstring filename) {
+JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_loadSchema(JNIEnv *env,
+                                                                jclass clazz,
+                                                                jstring filename) {
   (void)env;
   (void)clazz;
 
   char const *charString = (*env)->GetStringUTFChars(env, filename, NULL);
   DEBUG_ASSERT(charString != NULL,
-               "Out of memory getting string characters in getTagID");
+               "Out of memory getting string characters in loadSchema");
 
   struct Schema *schema =
       transientAllocate(sizeof(struct Schema), alignof(struct Schema));
   *schema = readSchema(charString);
+
+  (*env)->ReleaseStringUTFChars(env, filename, charString);
 
   return SchemaToID(schema);
 }
@@ -436,4 +105,318 @@ JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_freeSchema(JNIEnv *env,
   freeSchema(schemaPtr);
 
   freeTransient(schemaPtr, sizeof(struct Schema));
+}
+
+JNIEXPORT jobject JNICALL Java_gitissues_jni_GitIssues_loadIFF(JNIEnv *env,
+                                                               jclass clazz,
+                                                               jlong schema,
+                                                               jstring filename) {
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  char const *charString = (*env)->GetStringUTFChars(env, filename, NULL);
+  DEBUG_ASSERT(charString != NULL,
+               "Out of memory getting string characters in loadIFF");
+
+  struct Issue *issues;
+  uint32_t issuesSize;
+  gitissuesLoadIFF(schemaPtr, charString, &issues, &issuesSize);
+
+  (*env)->ReleaseStringUTFChars(env, filename, charString);
+
+  // Create Java ArrayList<Long> using cached IDs
+  jobject arrayList = (*env)->NewObject(env, arrayListClass, arrayListConstructor);
+
+  for (uint32_t i = 0; i < issuesSize; i++) {
+    jlong issueId = IssueToID(issues[i]);
+    jobject longObject = (*env)->CallStaticObjectMethod(env, longClass, longValueOfMethod, issueId);
+    (*env)->CallBooleanMethod(env, arrayList, arrayListAddMethod, longObject);
+  }
+
+  // Free the issues array (it was allocated by gitissuesLoadIFF)
+  freeTransient(issues, issuesSize * sizeof(struct Issue));
+
+  return arrayList;
+}
+
+JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_saveIFF(JNIEnv *env,
+                                                            jclass clazz,
+                                                            jlong schema,
+                                                            jstring filename,
+                                                            jobject issues) {
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  char const *charString = (*env)->GetStringUTFChars(env, filename, NULL);
+  DEBUG_ASSERT(charString != NULL,
+               "Out of memory getting string characters in saveIFF");
+
+  // Convert Java List<Long> to C array
+  jclass listClass = (*env)->GetObjectClass(env, issues);
+  jmethodID sizeMethod = (*env)->GetMethodID(env, listClass, "size", "()I");
+  jmethodID getMethod = (*env)->GetMethodID(env, listClass, "get", "(I)Ljava/lang/Object;");
+
+  jint listSize = (*env)->CallIntMethod(env, issues, sizeMethod);
+
+  struct Issue *cIssues = transientAllocate(listSize * sizeof(struct Issue), alignof(struct Issue));
+
+  jclass longClassLocal = (*env)->FindClass(env, "java/lang/Long");
+  jmethodID longLongValue = (*env)->GetMethodID(env, longClassLocal, "longValue", "()J");
+
+  for (jint i = 0; i < listSize; i++) {
+    jobject longObject = (*env)->CallObjectMethod(env, issues, getMethod, i);
+    jlong issueId = (*env)->CallLongMethod(env, longObject, longLongValue);
+    cIssues[i] = IDToIssue(issueId);
+  }
+
+  (*env)->ReleaseStringUTFChars(env, filename, charString);
+
+  gitissuesSaveIFF(schemaPtr, charString, cIssues, listSize);
+
+  // Free the transient array
+  freeTransient(cIssues, listSize * sizeof(struct Issue));
+}
+
+JNIEXPORT jlong JNICALL Java_gitissues_jni_GitIssues_createIssue(JNIEnv *env,
+                                                                 jclass clazz,
+                                                                 jlong schema) {
+  (void)env;
+  (void)clazz;
+
+  struct Issue issue = gitissuesCreateIssue(IDToSchema(schema));
+
+  return IssueToID(issue);
+}
+
+JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_attachTag(JNIEnv *env,
+                                                              jclass clazz,
+                                                              jlong schema,
+                                                              jlong issue,
+                                                              jstring tag,
+                                                              jbyteArray data) {
+  (void)env;
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  struct Issue issueStruct = IDToIssue(issue);
+
+  // Get the byte array data
+  jsize dataSize = (*env)->GetArrayLength(env, data);
+  jbyte *dataBytes = (*env)->GetByteArrayElements(env, data, NULL);
+
+  // Convert Java string to UmbraString
+  const char *tagChars = (*env)->GetStringUTFChars(env, tag, NULL);
+  DEBUG_ASSERT(tagChars != NULL, "Out of memory getting tag string");
+
+  struct UmbraString tagString;
+  createUmbraStringBoundParasitic(&tagString, tagChars, strlen(tagChars));
+
+  // Attach the tag - this will auto-register if needed
+  gitissuesAttachTag(schemaPtr, issueStruct, (void *)dataBytes, (uint32_t)dataSize, tagString);
+
+  (*env)->ReleaseStringUTFChars(env, tag, tagChars);
+  (*env)->ReleaseByteArrayElements(env, data, dataBytes, 0);
+}
+
+JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_attachTagByID(JNIEnv *env,
+                                                                   jclass clazz,
+                                                                   jlong schema,
+                                                                   jlong issue,
+                                                                   jlong tagID,
+                                                                   jbyteArray data) {
+  (void)env;
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  struct Issue issueStruct = IDToIssue(issue);
+
+  // Get the byte array data
+  jsize dataSize = (*env)->GetArrayLength(env, data);
+  jbyte *dataBytes = (*env)->GetByteArrayElements(env, data, NULL);
+
+  gitissuesAttachTagByID(schemaPtr, issueStruct, (void *)dataBytes, (ComponentID)tagID);
+
+  (*env)->ReleaseByteArrayElements(env, data, dataBytes, 0);
+}
+
+JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_detachTag(JNIEnv *env,
+                                                              jclass clazz,
+                                                              jlong schema,
+                                                              jlong issue,
+                                                              jstring tag) {
+  (void)env;
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  struct Issue issueStruct = IDToIssue(issue);
+
+  // Convert Java string to UmbraString
+  const char *tagChars = (*env)->GetStringUTFChars(env, tag, NULL);
+  DEBUG_ASSERT(tagChars != NULL, "Out of memory getting tag string");
+
+  struct UmbraString tagString;
+  createUmbraStringBoundParasitic(&tagString, tagChars, strlen(tagChars));
+
+  // Detach the tag
+  gitissuesDetachTag(schemaPtr, issueStruct, tagString);
+
+  (*env)->ReleaseStringUTFChars(env, tag, tagChars);
+}
+
+JNIEXPORT void JNICALL Java_gitissues_jni_GitIssues_detachTagByID(JNIEnv *env,
+                                                                   jclass clazz,
+                                                                   jlong schema,
+                                                                   jlong issue,
+                                                                   jlong tagID) {
+  (void)env;
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  struct Issue issueStruct = IDToIssue(issue);
+
+  gitissuesDetachTagByID(schemaPtr, issueStruct, (ComponentID)tagID);
+}
+
+JNIEXPORT jbyteArray JNICALL Java_gitissues_jni_GitIssues_getTag(JNIEnv *env,
+                                                                 jclass clazz,
+                                                                 jlong schema,
+                                                                 jlong issue,
+                                                                 jstring tag) {
+  (void)env;
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  struct Issue issueStruct = IDToIssue(issue);
+
+  // Convert Java string to UmbraString
+  const char *tagChars = (*env)->GetStringUTFChars(env, tag, NULL);
+  DEBUG_ASSERT(tagChars != NULL, "Out of memory getting tag string");
+
+  struct UmbraString tagString;
+  createUmbraStringBoundParasitic(&tagString, tagChars, strlen(tagChars));
+
+  // Get the tag data
+  void *tagData = gitissuesGetTag(schemaPtr, issueStruct, tagString);
+  if (tagData == NULL) {
+    (*env)->ReleaseStringUTFChars(env, tag, tagChars);
+    return NULL;
+  }
+
+  // Get the size of the data from the component pool
+  struct Registry *registry = &schemaPtr->registry;
+  ComponentID tagID = getComponentID(registry, tagString);
+
+  // Check if tag is valid
+  if (tagID == _GITISSUES_COMPONENT_INVALID) {
+    (*env)->ReleaseStringUTFChars(env, tag, tagChars);
+    return NULL;
+  }
+
+  // Get the component pool for this tag ID to get its size
+  struct ComponentPool *pool = getPool(registry, tagID);
+  if (pool == NULL) {
+    (*env)->ReleaseStringUTFChars(env, tag, tagChars);
+    return NULL; // Tag not found in registry
+  }
+
+  uint32_t sizeOfType = pool->sizeOfType;
+  if (sizeOfType == 0) {
+    (*env)->ReleaseStringUTFChars(env, tag, tagChars);
+    return NULL; // Invalid size
+  }
+
+  jbyteArray byteArray = (*env)->NewByteArray(env, sizeOfType);
+  if (byteArray == NULL) {
+    (*env)->ReleaseStringUTFChars(env, tag, tagChars);
+    return NULL; // Out of memory
+  }
+
+  (*env)->SetByteArrayRegion(env, byteArray, 0, sizeOfType, (const jbyte *)tagData);
+
+  (*env)->ReleaseStringUTFChars(env, tag, tagChars);
+  return byteArray;
+}
+
+JNIEXPORT jbyteArray JNICALL Java_gitissues_jni_GitIssues_getTagByID(JNIEnv *env,
+                                                                     jclass clazz,
+                                                                     jlong schema,
+                                                                     jlong issue,
+                                                                     jlong tagID) {
+  (void)env;
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  struct Issue issueStruct = IDToIssue(issue);
+
+  void *tagData = gitissuesGetTagByID(schemaPtr, issueStruct, (ComponentID)tagID);
+  if (tagData == NULL) {
+    return NULL;
+  }
+
+  // Get the size of the data from the component pool
+  struct Registry *registry = &schemaPtr->registry;
+  ComponentID id = (ComponentID)tagID;
+
+  // Check if tag is valid
+  if (id == _GITISSUES_COMPONENT_INVALID) {
+    return NULL;
+  }
+
+  // Get the component pool for this tag ID to get its size
+  struct ComponentPool *pool = getPool(registry, id);
+  if (pool == NULL) {
+    return NULL; // Tag not found in registry
+  }
+
+  uint32_t sizeOfType = pool->sizeOfType;
+  if (sizeOfType == 0) {
+    return NULL; // Invalid size
+  }
+
+  jbyteArray byteArray = (*env)->NewByteArray(env, sizeOfType);
+  if (byteArray == NULL) {
+    return NULL; // Out of memory
+  }
+
+  (*env)->SetByteArrayRegion(env, byteArray, 0, sizeOfType, (const jbyte *)tagData);
+  return byteArray;
+}
+
+JNIEXPORT jboolean JNICALL Java_gitissues_jni_GitIssues_hasTag(JNIEnv *env,
+                                                               jclass clazz,
+                                                               jlong schema,
+                                                               jlong issue,
+                                                               jstring tag) {
+  (void)env;
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  struct Issue issueStruct = IDToIssue(issue);
+
+  // Convert Java string to UmbraString
+  const char *tagChars = (*env)->GetStringUTFChars(env, tag, NULL);
+  DEBUG_ASSERT(tagChars != NULL, "Out of memory getting tag string");
+
+  struct UmbraString tagString;
+  createUmbraStringBoundParasitic(&tagString, tagChars, strlen(tagChars));
+
+  // Check if tag exists
+  jboolean result = gitissuesHasTag(schemaPtr, issueStruct, tagString) ? JNI_TRUE : JNI_FALSE;
+
+  (*env)->ReleaseStringUTFChars(env, tag, tagChars);
+  return result;
+}
+
+JNIEXPORT jboolean JNICALL Java_gitissues_jni_GitIssues_hasTagByID(JNIEnv *env,
+                                                                   jclass clazz,
+                                                                   jlong schema,
+                                                                   jlong issue,
+                                                                   jlong tagID) {
+  (void)env;
+  (void)clazz;
+
+  struct Schema *schemaPtr = IDToSchema(schema);
+  struct Issue issueStruct = IDToIssue(issue);
+
+  return gitissuesHasTagByID(schemaPtr, issueStruct, (ComponentID)tagID) ? JNI_TRUE : JNI_FALSE;
 }
