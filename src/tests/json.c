@@ -2,9 +2,10 @@
 #include <gitissues/tests/json.h>
 
 static void testWriting(struct JsonContext *ctx) {
+  char const *jsonOutPath = "jsonOut.json";
 
   pushTest(&ctx->suite, "Outputting to JSON file");
-  FILE *jsonOut = fopen("jsonOut.json", "w");
+  FILE *jsonOut = fopen(jsonOutPath, "w");
 
   jsonWriteObjectBegin(jsonOut);
 
@@ -89,6 +90,9 @@ void testJson(void) {
 
   testWriting(&ctx);
   testReading(&ctx);
+
+  NDEBUG_ASSERT(remove("jsonOut.json") == 0,
+                "Failed to remove json testing file");
 
   freeSuite(&ctx.suite);
   freeBlockAllocator(&ctx.allocator);

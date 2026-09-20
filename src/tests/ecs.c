@@ -178,9 +178,11 @@ void testECS(void) {
 
   popHeader(&ctx.suite);
 
-  // TODO: testing of registry
-
   serialiseRegistry(&ctx);
+
+  // TODO: test deserialisation of registry
+  NDEBUG_ASSERT(remove("registry.txt") == 0,
+                "Failed to remove registry testing file");
 
   free(ctx.entities);
   freeRegistry(&ctx.registry);
