@@ -165,7 +165,7 @@ void testECS(void) {
   ctx.registry = createRegistry();
   ctx.allocator = createBlockAllocator(4096);
 
-  createUmbraStringLifetime(&ctx.fizz, "Fizz");
+  createUmbraStringParasitic(&ctx.fizz, "Fizz");
   createUmbraStringAllocate(&ctx.buzz, "Buzz", &ctx.allocator);
 
   registerComponents(&ctx);
@@ -179,6 +179,10 @@ void testECS(void) {
   popHeader(&ctx.suite);
 
   serialiseRegistry(&ctx);
+
+  // TODO: test deserialisation of registry
+  NDEBUG_ASSERT(remove("registry.txt") == 0,
+                "Failed to remove registry testing file");
 
   free(ctx.entities);
   freeRegistry(&ctx.registry);

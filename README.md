@@ -2,16 +2,31 @@
 
 ## Build
 
+### Build C Library (JNI)
 ```sh
-# Build library/JNI bindings
+# Configure and build the C library with JNI bindings
 cmake --preset kotlin
 cmake --build --preset kotlin
+```
 
-# Run Kotlin CLI
+### Build Java Bindings
+```sh
+# Build the Java bindings module (produces jar and loads native library)
 cd kotlin
-./gradlew :cli:run
+./gradlew :jni:jar
+```
+
+### Build Kotlin API
+```sh
+# Build the Kotlin bindings module (depends on Java bindings)
+./gradlew :bindings:jar
 ```
 
 ## Description
 
-Will be the CLI/C library behind gitissues. Planning to have both Kotlin and Python bindings.
+Will be the C library behind gitissues with Java and Kotlin bindings. The CLI has been removed; this repository now focuses on the core library and language bindings.
+
+The library provides:
+- C core functionality (`gitissues_jni`)
+- Java bindings (in `kotlin/jni`)
+- Kotlin API wrapper (in `kotlin/bindings`)

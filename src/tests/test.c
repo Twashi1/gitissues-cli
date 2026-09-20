@@ -1,5 +1,7 @@
 #include <gitissues/defines.h>
+#include <gitissues/tests/allocator.h>
 #include <gitissues/tests/ecs.h>
+#include <gitissues/tests/iff.h>
 #include <gitissues/tests/json.h>
 #include <gitissues/tests/test.h>
 #include <stdio.h>
@@ -36,6 +38,11 @@ void freeSuite(struct Suite *suite) {
 }
 
 void pushTest(struct Suite *suite, char const *name) {
+  if (suite->tests.size == 1) {
+    GITISSUES_LOG_WARN(
+        "Pushed more than one test concurrently, feature will be removed soon");
+  }
+
   if (suite->tests.size >= suite->tests.capacity) {
     uint32_t newCapacity = suite->tests.capacity * 2 + 1;
 
@@ -49,6 +56,9 @@ void pushTest(struct Suite *suite, char const *name) {
 }
 
 void testFailed(struct Suite *suite, char const *reason) {
+  if (suite->tests.size == 0)
+    return;
+
   // TODO: additional context like line number passed in through a macro
   char const *testName = suite->tests.data[suite->tests.size - 1];
   suite->tests.size--;
@@ -59,7 +69,11 @@ void testFailed(struct Suite *suite, char const *reason) {
   depth = depth > 15 ? 15 : depth;
   memset(buf, (int)'\t', depth);
 
-  printf("%s%s: %s\n", buf, testName, reason);
+  if (reason != NULL) {
+    printf("%s[FAIL] %s: %s\n", buf, testName, reason);
+  } else {
+    printf("%s[FAIL] %s\n", buf, testName);
+  }
 
   for (uint32_t i = 0; i < suite->headers.size; i++) {
     suite->headers.data[i].numTests++;
@@ -67,6 +81,9 @@ void testFailed(struct Suite *suite, char const *reason) {
 }
 
 void testPassed(struct Suite *suite, char const *message) {
+  if (suite->tests.size == 0)
+    return;
+
   // TODO: additional context like line number passed in through a macro
   char const *testName = suite->tests.data[suite->tests.size - 1];
   suite->tests.size--;
@@ -77,7 +94,11 @@ void testPassed(struct Suite *suite, char const *message) {
   depth = depth > 15 ? 15 : depth;
   memset(buf, (int)'\t', depth);
 
-  printf("%s%s: %s\n", buf, testName, message);
+  if (message != NULL) {
+    printf("%s[PASS] %s: %s\n", buf, testName, message);
+  } else {
+    printf("%s[PASS] %s\n", buf, testName);
+  }
 
   for (uint32_t i = 0; i < suite->headers.size; i++) {
     suite->headers.data[i].numTests++;
@@ -127,8 +148,10 @@ void popHeader(struct Suite *suite) {
 }
 
 int main(void) {
+  testAllocator();
   testECS();
   testJson();
+  testIFF();
 
   return 0;
 }

@@ -1,5 +1,4 @@
 #include <gitissues/ecs/string_map.h>
-#include <gitissues/errs.h>
 #include <gitissues/log.h>
 
 struct StringMap createStringMap(void) {
@@ -24,12 +23,12 @@ void freeStringMap(struct StringMap *map) {
   free(map->dense.data);
 }
 
-enum ErrorCode reserveStringMap(struct StringMap *map, uint32_t minCapacity) {
+void reserveStringMap(struct StringMap *map, uint32_t minCapacity) {
   // TODO: check threshold!
   uint32_t newThreshold =
       (uint32_t)ceilf(minCapacity * _GITISSUES_STRING_MAP_LOAD_FACTOR);
   if (map->size + 1 < newThreshold)
-    return GITISSUES_OK;
+    return;
 
   uint32_t growthFactor = map->capacity * 2;
   uint32_t newCapacity =
@@ -45,9 +44,7 @@ enum ErrorCode reserveStringMap(struct StringMap *map, uint32_t minCapacity) {
   // Create new allocation, give to newMap temporarily
   newMap.data =
       (struct StringMapNode *)calloc(newCapacity, sizeof(struct StringMapNode));
-  if (DEBUG_CONDITION(newMap.data == NULL)) {
-    return GITISSUES_OUT_OF_MEMORY;
-  }
+  DEBUG_ASSERT(newMap.data != NULL, "Failed to allocate space for new map");
 
   newMap.dense.data = (struct StringMapNode *)realloc(
       map->dense.data, newCapacity * sizeof(struct StringMapNode));
@@ -74,25 +71,16 @@ enum ErrorCode reserveStringMap(struct StringMap *map, uint32_t minCapacity) {
   map->dense.data = newMap.dense.data;
   map->dense.capacity = newMap.dense.capacity;
   map->threshold = newMap.threshold;
-
-  return GITISSUES_OK;
 }
 
-enum ErrorCode insertStringMap(struct StringMap *map, struct UmbraString string,
-                               ComponentID value) {
-  enum ErrorCode ec = reserveStringMap(map, map->capacity + 1);
-  if (DEBUG_CONDITION(ec != GITISSUES_OK)) {
-    return ec;
-  }
-
+void insertStringMap(struct StringMap *map, struct UmbraString string,
+                     ComponentID value) {
+  reserveStringMap(map, map->capacity + 1);
   _insertUncheckedStringMap(map, string, value);
-
-  return GITISSUES_OK;
 }
 
-enum ErrorCode _insertUncheckedStringMap(struct StringMap *map,
-                                         struct UmbraString string,
-                                         ComponentID value) {
+void _insertUncheckedStringMap(struct StringMap *map, struct UmbraString string,
+                               ComponentID value) {
   uint32_t hash = fnv1aHashUmbra(string);
   uint32_t index = hash % map->capacity;
   uint32_t steps = 0;
@@ -103,6 +91,7 @@ enum ErrorCode _insertUncheckedStringMap(struct StringMap *map,
   do {
     // Indicator that this slot is empty
     if (map->data[index].string.size == 0) {
+      // Insert into the slot
       map->data[index].string = string;
       map->data[index].stringHash = hash;
       map->data[index].value = value;
@@ -114,16 +103,17 @@ enum ErrorCode _insertUncheckedStringMap(struct StringMap *map,
       map->dense.data[map->dense.size].value = value;
       ++map->dense.size;
 
-      return GITISSUES_OK;
+      return;
     }
 
     index = (index + 1) % map->capacity;
   } while (steps++ < map->capacity);
 
-  return GITISSUES_STRING_MAP_INSERTION_FAIL;
+  return;
 }
 
-ComponentID getStringMap(struct StringMap *map, struct UmbraString string) {
+ComponentID getStringMap(struct StringMap const *map,
+                         struct UmbraString string) {
   if (map->size == 0)
     return _GITISSUES_COMPONENT_INVALID;
 
@@ -141,7 +131,7 @@ ComponentID getStringMap(struct StringMap *map, struct UmbraString string) {
       // Check string matches (OR: assume collisions are too rare or fail on
       // collisions)
       // TODO: if profiling concern, switch to the above assumption
-      if (compare(map->data[index].string, string)) {
+      if (umbraCompare(map->data[index].string, string)) {
         return map->data[index].value;
       }
     }

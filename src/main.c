@@ -11,7 +11,7 @@ void testRegistry(void) {
   Entity *e = malloc(sizeof(Entity) * 1000);
 
   struct UmbraString fizz;
-  createUmbraStringLifetime(&fizz, "Fizz");
+  createUmbraStringParasitic(&fizz, "Fizz");
   struct UmbraString buzz;
   createUmbraStringAllocate(&buzz, "Buzz", &allocator);
 

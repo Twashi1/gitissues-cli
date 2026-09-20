@@ -1,6 +1,5 @@
 #include <gitissues/defines.h>
 #include <gitissues/ecs/paged_array.h>
-#include <gitissues/errs.h>
 #include <gitissues/log.h>
 
 struct SparseArray createSparseArray(void) {
@@ -8,38 +7,30 @@ struct SparseArray createSparseArray(void) {
   return array;
 }
 
-enum ErrorCode reserveIndexSparseArray(struct SparseArray *array,
-                                       uint32_t index) {
+void reserveIndexSparseArray(struct SparseArray *array, uint32_t index) {
   uint32_t page = _ECS_GET_PAGE(index);
   uint32_t newSize =
       page + 1; // No growth factor, we expect to rellocate infrequently
 
-  GITISSUES_LOG_DEBUG("Reserving page index %d, for index %d, new size: %d",
-                      page, index, newSize);
+  // GITISSUES_LOG_DEBUG("Reserving page index %d, for index %d, new size: %d",
+  //                     page, index, newSize);
 
   if (LIKELY(array->size >= newSize))
-    return GITISSUES_OK;
+    return;
 
   Entity **p = (Entity **)realloc(array->pages, newSize * sizeof(Entity *));
-
-  if (DEBUG_CONDITION(p == NULL)) {
-    return GITISSUES_OUT_OF_MEMORY;
-  }
+  DEBUG_ASSERT(p != NULL, "Failed to reallocate pages in sparse array");
 
   array->pages = p;
   array->size = newSize;
   // Allocate the page
   Entity *e = (Entity *)malloc(_ECS_PAGE_SIZE * sizeof(Entity));
-
-  if (DEBUG_CONDITION(e == NULL)) {
-    return GITISSUES_OUT_OF_MEMORY;
-  }
+  DEBUG_ASSERT(e != NULL,
+               "Failed to allocate space for a page in sparse array");
 
   memset(e, 0xff, _ECS_PAGE_SIZE * sizeof(Entity));
 
   array->pages[page] = e;
-
-  return GITISSUES_OK;
 }
 
 bool containsEntitySparseArray(struct SparseArray const *array, Entity entity) {
@@ -64,32 +55,26 @@ uint32_t getIndexSparseArray(struct SparseArray const *array, Entity entity) {
   return entityToPos(array->pages[pageIndex][indexWithinPage]);
 }
 
-enum ErrorCode addEntitySparseArray(struct SparseArray *array, Entity entity,
-                                    uint32_t value) {
-  if (DEBUG_CONDITION(containsEntitySparseArray(array, entity))) {
-    return GITISSUES_ENTITY_ALREADY_EXISTED;
-  }
+void addEntitySparseArray(struct SparseArray *array, Entity entity,
+                          uint32_t value) {
+  DEBUG_ASSERT(
+      !containsEntitySparseArray(array, entity),
+      "Attempted to add entity to sparse array when entity already existed");
 
   uint32_t index = entityToPos(entity);
 
-  enum ErrorCode ec = reserveIndexSparseArray(array, index);
-  if (ec != GITISSUES_OK) {
-    return ec;
-  }
+  reserveIndexSparseArray(array, index);
 
   uint32_t pageIndex = _ECS_GET_PAGE(index);
   uint32_t indexWithinPage = _ECS_INDEX_IN_PAGE(index);
 
   array->pages[pageIndex][indexWithinPage] = value;
-
-  return GITISSUES_OK;
 }
 
-enum ErrorCode releaseEntitySparseArray(struct SparseArray *array,
-                                        Entity entity) {
-  if (DEBUG_CONDITION(!containsEntitySparseArray(array, entity))) {
-    return GITISSUES_ENTITY_DID_NOT_EXIST;
-  }
+void releaseEntitySparseArray(struct SparseArray *array, Entity entity) {
+  DEBUG_ASSERT(
+      !containsEntitySparseArray(array, entity),
+      "Attempted to remove entity from sparse array, but entity never existed");
 
   uint32_t index = entityToPos(entity);
   uint32_t pageIndex = _ECS_GET_PAGE(index);
@@ -97,8 +82,6 @@ enum ErrorCode releaseEntitySparseArray(struct SparseArray *array,
 
   // TODO: maybe more correct is just _ECS_NULL
   array->pages[pageIndex][indexWithinPage] = _ECS_NULL | _ECS_DEAD;
-
-  return GITISSUES_OK;
 }
 
 void freeSparseArray(struct SparseArray *array) {
@@ -110,10 +93,6 @@ void freeSparseArray(struct SparseArray *array) {
 }
 
 void saveSparseArray(struct SparseArray const *array, FILE *p) {
-  // struct SparseArray {
-  //     Entity** pages;
-  //     uint32_t size;
-  // };
   // Write page size
   uint32_t pageSize = _ECS_PAGE_SIZE;
   fwrite(&pageSize, sizeof(pageSize), 1, p);
@@ -138,14 +117,12 @@ struct SparseArray loadSparseArray(FILE *p) {
   uint32_t arraySize = 0;
   fread(&arraySize, sizeof(arraySize), 1, p);
 
-  enum ErrorCode ec =
-      reserveIndexSparseArray(&array, (arraySize - 1) * _ECS_PAGE_SIZE);
-  DEBUG_PRINT_ERROR("Failed to reserve sparse array after load: %s\n", ec);
-  DEBUG_ASSERT(ec == GITISSUES_OK, "Reserve index sparse array failed");
+  reserveIndexSparseArray(&array, (arraySize - 1) * _ECS_PAGE_SIZE);
 
   for (uint32_t i = 0; i < array.size; i++) {
     Entity *page = array.pages[i];
     DEBUG_ASSERT(page != NULL, "Attempted to write to null page");
+
     fread(page, sizeof(Entity), _ECS_PAGE_SIZE, p);
   }
 

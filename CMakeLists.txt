@@ -6,6 +6,8 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(libgit2 CONFIG REQUIRED)
+
 option(BUILD_JNI "Build JNI bindings" OFF)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
@@ -15,6 +17,9 @@ set(GITISSUES_SOURCES
     src/issue.c
     src/allocator.c
     src/global.c
+    src/log.c
+    src/iff/iff.c
+    src/iff/schema.c
     src/ecs/component_pool.c
     src/ecs/entity.c
     src/ecs/paged_array.c
@@ -22,10 +27,17 @@ set(GITISSUES_SOURCES
     src/ecs/string_map.c
     src/tests/ecs.c
     src/tests/json.c
+    src/tests/allocator.c
+    src/tests/iff.c
     src/json/json.c
+    src/api/api.c
 )
 
 add_library(gitissues_lib ${GITISSUES_SOURCES})
+
+set_target_properties(gitissues_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
 
 # Compile definition for skipping relative path when logging
 string(LENGTH "${CMAKE_SOURCE_DIR}" SOURCE_DIR_LENGTH)
@@ -41,6 +53,10 @@ target_compile_options(gitissues_lib PRIVATE
 )
 # Linking maths
 target_link_libraries(gitissues_lib PRIVATE m)
+target_link_libraries(gitissues_lib
+    PRIVATE
+        libgit2::libgit2package
+)
 
 add_executable(gitissues src/main.c)
 target_link_libraries(gitissues PRIVATE gitissues_lib)
@@ -59,3 +75,10 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS)
             ${CMAKE_SOURCE_DIR}/compile_commands.json
     )
 endif()
+
+# Copy example schema/issue files to build directory
+add_custom_command(TARGET gitissues_lib POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/examples"
+        "$<TARGET_FILE_DIR:gitissues_lib>/examples"
+)

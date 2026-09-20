@@ -1,0 +1,28 @@
+{
+	"properties": {
+    "sep": "::",
+    "term": ";",
+    "date_format": "DD-MM-YY"
+	},
+	"tags": {
+		"project": {
+			"alias": "@",
+			"type": "string",
+			"required": true 
+		},
+    "entity": {
+      "alias": "$",
+      "type": "int64",
+      "required": false
+    },
+    "status": {
+      "alias": "#",
+      "type": "string",
+      "required": false
+    },
+    "created": {
+      "type": "date",
+      "required": false
+    }
+	}
+}

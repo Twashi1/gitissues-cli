@@ -1,6 +1,6 @@
-#include "gitissues/allocator.h"
-#include "gitissues/errs.h"
+#include "gitissues/defines.h"
 #include <ctype.h>
+#include <gitissues/allocator.h>
 #include <gitissues/json/json.h>
 #include <inttypes.h>
 
@@ -92,7 +92,7 @@ void jsonSkipWhitespace(struct JsonReader *p) {
   }
 }
 
-enum ErrorCode jsonReadInt32(struct JsonReader *p, int32_t *value) {
+void jsonReadInt32(struct JsonReader *p, int32_t *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading int");
@@ -101,14 +101,13 @@ enum ErrorCode jsonReadInt32(struct JsonReader *p, int32_t *value) {
 
   if (sscanf(p->data + p->pos, "%d%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadUInt32(struct JsonReader *p, uint32_t *value) {
+void jsonReadUInt32(struct JsonReader *p, uint32_t *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading int");
@@ -117,14 +116,13 @@ enum ErrorCode jsonReadUInt32(struct JsonReader *p, uint32_t *value) {
 
   if (sscanf(p->data + p->pos, "%u%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadInt64(struct JsonReader *p, int64_t *value) {
+void jsonReadInt64(struct JsonReader *p, int64_t *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading int");
@@ -133,14 +131,14 @@ enum ErrorCode jsonReadInt64(struct JsonReader *p, int64_t *value) {
 
   if (sscanf(p->data + p->pos, "%" SCNd64 "%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadUInt64(struct JsonReader *p, uint64_t *value) {
+void jsonReadUInt64(struct JsonReader *p, uint64_t *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading int");
@@ -149,14 +147,13 @@ enum ErrorCode jsonReadUInt64(struct JsonReader *p, uint64_t *value) {
 
   if (sscanf(p->data + p->pos, "%" SCNu64 "%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadFloat(struct JsonReader *p, float *value) {
+void jsonReadFloat(struct JsonReader *p, float *value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading float");
@@ -165,16 +162,15 @@ enum ErrorCode jsonReadFloat(struct JsonReader *p, float *value) {
 
   if (sscanf(p->data + p->pos, "%f%n", value, &consumed) == 1) {
     p->pos += consumed;
-    return GITISSUES_OK;
+    return;
   }
 
   DEBUG_ASSERT(false, "Failed to read integer from json");
-  return GITISSUES_JSON_FAIL_READ;
 }
 
-enum ErrorCode jsonReadStringLifetime(struct JsonReader *p,
-                                      struct BlockAllocator *allocator,
-                                      char **value) {
+void jsonReadStringLifetime(struct JsonReader *p,
+                            struct BlockAllocator *allocator, char **value) {
+  // TODO: also read strings that start with single quotes
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading string");
@@ -222,14 +218,12 @@ enum ErrorCode jsonReadStringLifetime(struct JsonReader *p,
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '"',
                "Expected quotation mark");
   p->pos++;
-
-  return GITISSUES_OK;
 }
 
 // TODO: terrible duplication
-enum ErrorCode jsonReadStringTransient(struct JsonReader *p,
-                                       struct ImplicitAllocator *allocator,
-                                       char **value) {
+void jsonReadStringTransient(struct JsonReader *p,
+                             struct ImplicitAllocator *allocator,
+                             char **value) {
   jsonSkipWhitespace(p);
 
   DEBUG_ASSERT(p->pos < p->size, "Reached EOF before reading string");
@@ -243,6 +237,9 @@ enum ErrorCode jsonReadStringTransient(struct JsonReader *p,
   bool escaped = false;
   uint32_t start = p->pos;
   uint32_t i;
+
+  // TODO: need to build the string character by character, so we can properly
+  // deal with escape characters.
 
   // TODO: this doesn't properly deal with \n, \t, just \\ and \" (i think)
   for (i = start; i < p->size; i++) {
@@ -277,32 +274,24 @@ enum ErrorCode jsonReadStringTransient(struct JsonReader *p,
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == '"',
                "Expected quotation mark");
   p->pos++;
-
-  return GITISSUES_OK;
 }
 
-enum ErrorCode jsonReadKeyTransient(struct JsonReader *p,
-                                    struct ImplicitAllocator *allocator,
-                                    char **key) {
+void jsonReadKeyTransient(struct JsonReader *p,
+                          struct ImplicitAllocator *allocator, char **key) {
   jsonReadStringTransient(p, allocator, key);
 
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == ':',
                "Expected colon after reading key");
   p->pos++;
-
-  return GITISSUES_OK;
 }
 
-enum ErrorCode jsonReadKeyLifetime(struct JsonReader *p,
-                                   struct BlockAllocator *allocator,
-                                   char **key) {
+void jsonReadKeyLifetime(struct JsonReader *p, struct BlockAllocator *allocator,
+                         char **key) {
   jsonReadStringLifetime(p, allocator, key);
 
   DEBUG_ASSERT(p->pos < p->size && p->data[p->pos] == ':',
                "Expected colon after reading key");
   p->pos++;
-
-  return GITISSUES_OK;
 }
 
 void jsonReadArrayBegin(struct JsonReader *p) {
@@ -381,4 +370,211 @@ size_t jsonGetLengthMatchObject(struct JsonReader *p) {
 
   DEBUG_ASSERT(false, "Mismatched curlys");
   return 0;
+}
+
+struct JsonNode *jsonReadObject(struct JsonReader *p,
+                                struct ImplicitAllocator *allocator) {
+  jsonReadObjectBegin(p);
+
+  struct JsonObject object = {NULL, 0, 0};
+
+  while (jsonPeekNext(p) != '}') {
+    struct JsonPair pair = jsonReadPair(p, allocator);
+    ARRAY_APPEND(object, pair, ARRAY_GROWTH_ONE_HALF);
+
+    // if comma is next, consume it
+    jsonReadNext(p);
+  }
+
+  jsonReadObjectEnd(p);
+
+  struct JsonNode *node = allocateImplicitAllocator(
+      allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+  DEBUG_ASSERT(node != NULL, "Failed to allocate space for JsonNode");
+
+  node->data.object = object;
+  node->type = JSON_OBJECT;
+
+  return node;
+}
+
+struct JsonNode *jsonReadArray(struct JsonReader *p,
+                               struct ImplicitAllocator *allocator) {
+  jsonReadArrayBegin(p);
+
+  struct JsonArray array = {NULL, 0, 0};
+  while (jsonPeekNext(p) != ']') {
+    struct JsonNode *value = jsonReadValue(p, allocator);
+    ARRAY_APPEND(array, *value, ARRAY_GROWTH_ONE_HALF);
+    freeFastAllocationImplicitAllocator(allocator, value,
+                                        sizeof(struct JsonNode));
+
+    // if comma is next, consume it
+    jsonReadNext(p);
+  }
+
+  jsonReadArrayEnd(p);
+
+  struct JsonNode *node = allocateImplicitAllocator(
+      allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+  DEBUG_ASSERT(node != NULL, "Failed to allocate space for JsonNode");
+
+  node->data.array = array;
+  node->type = JSON_ARRAY;
+
+  return node;
+}
+
+struct JsonNode *jsonReadValue(struct JsonReader *p,
+                               struct ImplicitAllocator *allocator) {
+  char next = jsonPeekNext(p);
+
+  // Check if is a string
+  if (next == '"') {
+    char *string = NULL;
+    jsonReadStringTransient(p, allocator, &string);
+
+    struct UmbraString stringUmbra;
+    createUmbraStringParasitic(&stringUmbra, string);
+
+    struct JsonNode *node = allocateImplicitAllocator(
+        allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+    DEBUG_ASSERT(node != NULL, "Failed to allocate space for JsonNode");
+
+    node->data.string = stringUmbra;
+    node->type = JSON_STRING;
+
+    return node;
+  }
+
+  // Check if is an object
+  if (next == '{') {
+    return jsonReadObject(p, allocator);
+  }
+
+  // Check if is an array
+  if (next == '[') {
+    return jsonReadArray(p, allocator);
+  }
+
+  if (isdigit(next) || next == '-' || next == '.') {
+    // TODO: check if we can use strtol
+    int64_t integer;
+    double floating;
+    int consumed;
+    bool wasInteger = false;
+
+    // TODO: code duplication of readInt and readFloat
+    if (sscanf(p->data + p->pos, "%lf%n", &floating, &consumed) == 1) {
+      p->pos += consumed;
+    }
+
+    else if (sscanf(p->data + p->pos, "%" SCNd64 "%n", &integer, &consumed) ==
+             1) {
+      p->pos += consumed;
+      wasInteger = true;
+    }
+
+    else {
+      DEBUG_ASSERT(false, "Failed to read number from json");
+    }
+
+    struct JsonNode *node = allocateImplicitAllocator(
+        allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+
+    if (wasInteger) {
+      node->data.integer = integer;
+      node->type = JSON_INTEGER;
+    } else {
+      node->data.floating = floating;
+      node->type = JSON_FLOAT;
+    }
+
+    return node;
+  }
+
+  // TODO: read bool function?
+  if (next == 't' || next == 'f') {
+    if (strncmp(p->data + p->pos, "true", strlen("true")) == 0) {
+      p->pos += sizeof("true") - 1;
+
+      struct JsonNode *node = allocateImplicitAllocator(
+          allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+      node->data.boolean = 1;
+      node->type = JSON_BOOLEAN;
+
+      return node;
+    }
+
+    if (strncmp(p->data + p->pos, "false", strlen("false")) == 0) {
+      p->pos += sizeof("false") - 1;
+
+      struct JsonNode *node = allocateImplicitAllocator(
+          allocator, sizeof(struct JsonNode), alignof(struct JsonNode));
+      node->data.boolean = 0;
+      node->type = JSON_BOOLEAN;
+      return node;
+    }
+
+    DEBUG_ASSERT(false, "Failed to read boolean from json");
+  }
+
+  DEBUG_ASSERT(false, "Failed to read any value from json");
+
+  return NULL;
+}
+
+struct JsonPair jsonReadPair(struct JsonReader *p,
+                             struct ImplicitAllocator *allocator) {
+  char *string = NULL;
+  jsonReadKeyTransient(p, allocator, &string);
+
+  struct UmbraString key;
+  createUmbraStringParasitic(&key, string);
+
+  struct JsonNode *value = jsonReadValue(p, allocator);
+
+  struct JsonPair pair;
+  pair.key = key;
+  pair.value = value;
+
+  return pair;
+}
+
+struct JsonNode *jsonReadFile(struct JsonReader *p,
+                              struct ImplicitAllocator *allocator) {
+  return jsonReadValue(p, allocator);
+}
+
+void freeJsonNode(struct JsonNode *node, struct ImplicitAllocator *allocator) {
+  switch (node->type) {
+  case JSON_OBJECT:
+    for (uint32_t i = 0; i < node->data.object.size; i++) {
+      freeJsonNode(node->data.object.data[i].value, allocator);
+    }
+
+    break;
+
+  case JSON_ARRAY:
+    for (uint32_t i = 0; i < node->data.array.size; i++) {
+      freeJsonNode(&node->data.array.data[i], allocator);
+    }
+
+    break;
+
+  case JSON_STRING:
+    freeUmbraStringTransient(&node->data.string, allocator);
+    break;
+
+  case JSON_INTEGER:
+  case JSON_FLOAT:
+  case JSON_BOOLEAN:
+    break;
+  default:
+    DEBUG_ASSERT(false, "Unknown json node type");
+    break;
+  }
+
+  // Free the node itself
+  freeFastAllocationImplicitAllocator(allocator, node, sizeof(struct JsonNode));
 }

@@ -10,11 +10,16 @@
 #include <stdio.h>
 #include <string.h>
 
+// TODO: unused
+struct FastComparisonMetadata {
+  uint8_t *patternJump;
+};
+
 struct UmbraString {
   uint32_t size;
   uint32_t prefix;
   union {
-    char const *ptr;
+    char *ptr;
     uint64_t data;
   };
 };
@@ -38,22 +43,45 @@ _Static_assert(alignof(struct UmbraString) == 8 ||
                    alignof(struct UmbraString) == 4,
                "unexpected platform alignment");
 
-// TODO: evaluate whether or not we need such an optimized string construct;
-// consider that modifiable string performance is poor if we need to make
-// frequent changes
-bool compare(struct UmbraString const a, struct UmbraString const b);
-bool _attemptInplaceConstruction(struct UmbraString *s, char const *value);
+// TODO: create some init/terminate function that calls all the various
+// init/terminate (like those for allocators too)
+// void initUmbraString(void);
+// void terminateUmbraString(void);
+
+// TODO: functions should work on generic string ranges
+bool umbraCompare(struct UmbraString const a, struct UmbraString const b);
+bool umbraCompareString(struct UmbraString const a, char const *b);
+uint32_t umbraFirstIndexOf(struct UmbraString const string,
+                           struct UmbraString const substring, uint32_t offset);
 
 // Semantics of this naming is unclear; should be take ownership
-void createUmbraStringLifetime(struct UmbraString *s, char const *value);
+void createUmbraStringParasitic(struct UmbraString *s, char const *value);
+void createUmbraStringBoundParasitic(struct UmbraString *s, char const *value,
+                                     uint32_t valueLength);
+struct UmbraString createUmbraStringNull(void);
+struct UmbraString copyUmbraStringBlock(struct UmbraString const original,
+                                        struct BlockAllocator *allocator);
+struct UmbraString copyUmbraStringImplicit(struct UmbraString const original,
+                                           struct ImplicitAllocator *allocator);
+
 void createUmbraStringAllocate(struct UmbraString *s, char const *value,
                                struct BlockAllocator *allocator);
+void createUmbraStringBoundAllocate(struct UmbraString *s, char const *value,
+                                    uint32_t valueLength,
+                                    struct BlockAllocator *allocator);
 void createUmbraStringTransient(struct UmbraString *s, char const *value,
                                 struct ImplicitAllocator *allocator);
+void createUmbraStringBoundTransient(struct UmbraString *s, char const *value,
+                                     uint32_t valueLength,
+                                     struct ImplicitAllocator *allocator);
 void freeUmbraStringTransient(struct UmbraString *s,
                               struct ImplicitAllocator *allocator);
 
 void saveUmbraString(struct UmbraString const *s, FILE *p);
 struct UmbraString loadUmbraString(struct BlockAllocator *allocator, FILE *p);
+
+// Not null-terminated!
+char *getUmbraPtr(struct UmbraString *s);
+char const *getUmbraPtrConst(struct UmbraString const *s);
 
 #endif

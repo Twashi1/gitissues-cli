@@ -44,4 +44,17 @@ void popHeader(struct Suite *suite);
     }                                                                          \
   } while (0)
 
+#define TEST_FAIL_IF(suite, condition)                                         \
+  do {                                                                         \
+    if (!!(condition)) {                                                       \
+      testFailed((suite), #condition);                                         \
+    }                                                                          \
+  } while (0)
+#define TEST_FAIL_IF_MSG(suite, condition, message)                            \
+  do {                                                                         \
+    if (!!(condition)) {                                                       \
+      testFailed((suite), (message));                                          \
+    }                                                                          \
+  } while (0)
+
 #endif

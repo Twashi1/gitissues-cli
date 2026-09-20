@@ -1,6 +1,6 @@
 #include <gitissues/ecs/registry.h>
 
-#include "gitissues/errs.h"
+#include "gitissues/ecs/component_pool.h"
 #include "gitissues/log.h"
 
 struct Registry createRegistry(void) {
@@ -82,13 +82,12 @@ bool isRegistered(struct Registry *registry, struct UmbraString string) {
 ComponentID registerComponentID(struct Registry *registry,
                                 struct UmbraString const string,
                                 uint32_t sizeOfType) {
-  GITISSUES_LOG_DEBUG("Registering component with prefix %.4s", &string.prefix);
+  GITISSUES_LOG_DEBUG("Registering component with name %.*s", string.size,
+                      getUmbraPtrConst(&string));
   ComponentID id = getStringMap(&registry->componentIDMap, string);
 
   if (id == _GITISSUES_COMPONENT_INVALID) {
-    enum ErrorCode ec = insertStringMap(&registry->componentIDMap, string,
-                                        registry->pools.size);
-    DEBUG_ASSERT(ec == GITISSUES_OK, "Failed to insert string into map");
+    insertStringMap(&registry->componentIDMap, string, registry->pools.size);
     id = registry->pools.size;
 
     if (registry->pools.size + 1 >= registry->pools.capacity) {
@@ -120,22 +119,19 @@ ComponentID getComponentID(struct Registry *registry,
 void addComponent(struct Registry *registry, Entity entity, ComponentID id,
                   uint8_t *data) {
   struct ComponentPool *pool = &registry->pools.data[id];
-  GITISSUES_LOG_DEBUG("Adding component id %d; ptr: %p to entity %d", id,
-                      (void *)pool, entity);
-  enum ErrorCode ec = addEntityToComponentPool(pool, entity, data);
-  DEBUG_PRINT_ERROR("Add entity to component pool error: %s", ec);
-  DEBUG_ASSERT(ec == GITISSUES_OK, "Adding entity to component pool failed");
+  // GITISSUES_LOG_DEBUG("Adding component id %d; ptr: %p to entity %d", id,
+  //                     (void *)pool, entity);
+  addEntityToComponentPool(pool, entity, data);
 }
 
 void removeComponent(struct Registry *registry, Entity entity, ComponentID id) {
   struct ComponentPool *pool = &registry->pools.data[id];
-  enum ErrorCode ec = freeEntityComponentPool(pool, entity);
-  DEBUG_ASSERT(ec == GITISSUES_OK,
-               "Removing entity from component pool failed");
+  freeEntityComponentPool(pool, entity);
 }
 
-bool hasComponent(struct Registry *registry, Entity entity, ComponentID id) {
-  struct ComponentPool *pool = &registry->pools.data[id];
+bool hasComponent(struct Registry const *registry, Entity entity,
+                  ComponentID id) {
+  struct ComponentPool const *pool = &registry->pools.data[id];
   return containsEntityComponentPool(pool, entity);
 }
 
@@ -143,6 +139,12 @@ uint8_t *getComponent(struct Registry *registry, Entity entity,
                       ComponentID id) {
   struct ComponentPool *pool = &registry->pools.data[id];
   return getEntityComponentPool(pool, entity);
+}
+
+uint8_t const *getComponentConst(struct Registry const *registry, Entity entity,
+                                 ComponentID id) {
+  struct ComponentPool const *pool = &registry->pools.data[id];
+  return getEntityComponentPoolConst(pool, entity);
 }
 
 uint8_t *getOrNullComponent(struct Registry *registry, Entity entity,
@@ -272,7 +274,7 @@ Entity loadEntityJson(struct Registry *registry, struct JsonReader *p) {
     jsonReadKeyLifetime(p, &registry->lifetimeAllocations, &key);
 
     struct UmbraString keyString = {0};
-    createUmbraStringLifetime(&keyString, key);
+    createUmbraStringParasitic(&keyString, key);
 
     ComponentID id = getComponentID(registry, keyString);
     DEBUG_ASSERT(isRegistered(registry, keyString),
@@ -300,7 +302,7 @@ void reloadEntityJson(struct Registry *registry, Entity entity,
     jsonReadKeyLifetime(p, &registry->lifetimeAllocations, &key);
 
     struct UmbraString keyString = {0};
-    createUmbraStringLifetime(&keyString, key);
+    createUmbraStringParasitic(&keyString, key);
 
     ComponentID id = getComponentID(registry, keyString);
     DEBUG_ASSERT(isRegistered(registry, keyString),
@@ -313,4 +315,86 @@ void reloadEntityJson(struct Registry *registry, Entity entity,
   }
 
   jsonReadObjectEnd(p);
+}
+
+struct PoolIterator iterateComponentPool(struct Registry *registry,
+                                         ComponentID id) {
+  struct PoolIterator iterator;
+  struct ComponentPool *pool = getPool(registry, id);
+  iterator.start = pool->dense.data;
+  iterator.count = pool->dense.size;
+  iterator.sizeOfType = pool->sizeOfType;
+  iterator.registry = registry;
+
+  return iterator;
+}
+
+struct EntityGroupIterator iterateComponentGroup(struct Registry *registry,
+                                                 ComponentID *ids,
+                                                 uint32_t numIds) {
+  struct EntityGroupIterator iterator;
+  iterator.registry = registry;
+
+  if (numIds == 0 || ids == NULL) {
+    iterator.entities = NULL;
+    iterator.entityCount = 0;
+    iterator.ids = NULL;
+    iterator.idCount = 0;
+
+    return iterator;
+  }
+
+  iterator.idCount = numIds;
+  iterator.ids = malloc(sizeof(ComponentID) * numIds);
+  DEBUG_ASSERT(iterator.ids != NULL,
+               "Failed to allocate for iterator component ids");
+  memcpy(iterator.ids, ids, numIds * sizeof(ComponentID));
+
+  // Find all pools, select the smallest one, and iterate those entities
+  struct ComponentPool *pool = NULL;
+  uint32_t poolMinimumEntities = UINT32_MAX;
+
+  for (uint32_t i = 0; i < numIds; i++) {
+    ComponentID id = ids[i];
+
+    struct ComponentPool *candidate = getPool(registry, id);
+    DEBUG_ASSERT(candidate != NULL, "Candidate pool was null");
+
+    if (candidate->dense.size < poolMinimumEntities) {
+      pool = candidate;
+    }
+  }
+
+  // Iterate entities of smallest pool
+  // We'll be lazy with allocation here and allocate more than we need
+  iterator.entities = malloc(pool->dense.size * sizeof(Entity));
+  iterator.entityCount = 0;
+  DEBUG_ASSERT(iterator.entities != NULL,
+               "Failed to allocate memory for iterator entity storage");
+
+  for (uint32_t i = 0; i < pool->dense.size; i++) {
+    Entity entity = pool->dense.entity[i];
+
+    bool signatureIsSubset = true;
+
+    for (uint32_t j = 0; j < numIds; j++) {
+      ComponentID id = ids[j];
+
+      if (!hasComponent(registry, entity, id)) {
+        signatureIsSubset = false;
+        break;
+      }
+    }
+
+    if (signatureIsSubset) {
+      iterator.entities[iterator.entityCount++] = entity;
+    }
+  }
+
+  return iterator;
+}
+
+void freeComponentGroupIterator(struct EntityGroupIterator *iterator) {
+  free(iterator->entities);
+  free(iterator->ids);
 }
