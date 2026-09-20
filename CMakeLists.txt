@@ -65,7 +65,7 @@ add_executable(gitissues_tests src/tests/test.c)
 target_link_libraries(gitissues_tests PRIVATE gitissues_lib)
 
 if (BUILD_JNI)
-  add_subdirectory(kotlin/jni)
+  add_subdirectory(jni)
 endif()
 
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
