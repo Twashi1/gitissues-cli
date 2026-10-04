@@ -5,8 +5,7 @@
 #include "gitissues/umbra_string.h"
 #include <gitissues/iff/schema.h>
 #include <gitissues/json/json.h>
-
-struct Schema defaultSchema;
+#include <gitissues/uuid.h>
 
 uint32_t getSizeOfSchemaProperty(enum SchemaPropertyTypes type) {
   switch (type) {
@@ -22,10 +21,35 @@ uint32_t getSizeOfSchemaProperty(enum SchemaPropertyTypes type) {
     return sizeof(struct SchemaDate);
   case SCHEMA_TYPE_BOOLEAN:
     return sizeof(bool);
+  case SCHEMA_TYPE_UUID:
+    return sizeof(UUID7);
   default:
     NDEBUG_ASSERT(false, "Unknown schema type");
     return 0;
   }
+}
+
+static void addRegisteredTag(struct Schema *schema,
+                             struct TagMetadata *metadata) {
+  DEBUG_ASSERT(metadata->tagID != _GITISSUES_COMPONENT_INVALID,
+               "Expected tag ID to be valid");
+
+  GITISSUES_LOG_DEBUG(
+      "Writing tag metadata to registered id at %d, should be size %d",
+      metadata->tagID, ARRAY_GROWTH_PLUS_ONE(schema->tagMeta.capacity));
+
+  uint32_t oldCapacity = schema->tagMeta.capacity;
+  ARRAY_RESERVE(schema->tagMeta, (metadata->tagID + 1), ARRAY_GROWTH_PLUS_ONE);
+
+  // Need to zero initialize all new elements
+  for (uint32_t i = oldCapacity; i < schema->tagMeta.capacity; i++) {
+    memset(&schema->tagMeta.data[i], 0, sizeof(struct TagMetadata));
+
+    schema->tagMeta.data[i].tagID = _GITISSUES_COMPONENT_INVALID;
+    schema->tagMeta.data[i].type = SCHEMA_TYPE_INVALID;
+  }
+
+  schema->tagMeta.data[metadata->tagID] = *metadata;
 }
 
 static void readTagMetadata(struct Schema *schema, struct JsonNode *node,
@@ -131,22 +155,7 @@ static void readTagMetadata(struct Schema *schema, struct JsonNode *node,
     metadata.tagID = registerComponentID(
         &schema->registry, tagName, getSizeOfSchemaProperty(metadata.type));
 
-    GITISSUES_LOG_DEBUG(
-        "Writing tag metadata to registered id at %d, should be size %d",
-        metadata.tagID, ARRAY_GROWTH_PLUS_ONE(schema->tagMeta.capacity));
-
-    uint32_t oldCapacity = schema->tagMeta.capacity;
-    ARRAY_RESERVE(schema->tagMeta, (metadata.tagID + 1), ARRAY_GROWTH_PLUS_ONE);
-
-    // Need to zero initialize all new elements
-    for (uint32_t i = oldCapacity; i < schema->tagMeta.capacity; i++) {
-      memset(&schema->tagMeta.data[i], 0, sizeof(struct TagMetadata));
-
-      schema->tagMeta.data[i].tagID = _GITISSUES_COMPONENT_INVALID;
-      schema->tagMeta.data[i].type = SCHEMA_TYPE_INVALID;
-    }
-
-    schema->tagMeta.data[metadata.tagID] = metadata;
+    addRegisteredTag(schema, &metadata);
   }
   // Add to unregistered tag metadata
   else {
@@ -159,14 +168,17 @@ static void readTagMetadatasSchema(struct Schema *schema,
   DEBUG_ASSERT(node->type == JSON_OBJECT, "Expected tags to be an object");
 
   // Expecting list of tag name: { tag properties }
-
   for (uint32_t i = 0; i < node->data.object.size; i++) {
     struct JsonPair pair = node->data.object.data[i];
     DEBUG_ASSERT(pair.key.size > 0, "Expected key to be non-empty");
     DEBUG_ASSERT(pair.value != NULL, "Expected value to be non-null");
 
-    // TODO: use name (key of the pair) to register component
     struct UmbraString tagName = pair.key;
+
+    NDEBUG_ASSERT(!umbraCompareString(tagName, "id"),
+                  "Tag name 'id' is reserved, cannot be used");
+    NDEBUG_ASSERT(!umbraCompareString(tagName, "description"),
+                  "Tag name 'description' is reserved, cannot be used");
 
     readTagMetadata(schema, pair.value, tagName);
   }
@@ -332,6 +344,7 @@ struct Schema readSchema(char const *filename) {
   schema.aliases = createStringMap();
   schema.numRequiredTags = 0;
   schema.registry = createRegistry();
+  UUID7Seed(&schema.rng);
 
   struct UmbraString dateFormat;
   createUmbraStringParasitic(&dateFormat, "YYYY-MM-DD");
@@ -347,6 +360,30 @@ struct Schema readSchema(char const *filename) {
 
   schema.descriptionID = registerComponentID(&schema.registry, descriptionTag,
                                              sizeof(struct UmbraString));
+  struct TagMetadata descriptionMetadata = {0};
+  descriptionMetadata.tagID = schema.descriptionID;
+  descriptionMetadata.type = SCHEMA_TYPE_STRING;
+  descriptionMetadata.name = descriptionTag;
+  descriptionMetadata.isRequired = false;
+  descriptionMetadata.alias = createUmbraStringNull();
+  descriptionMetadata.defaultValue = createUmbraStringNull();
+  addRegisteredTag(&schema, &descriptionMetadata);
+
+  struct UmbraString idTag;
+  createUmbraStringParasitic(&idTag, "id");
+  NDEBUG_ASSERT(!isRegistered(&schema.registry, idTag),
+                "Must have 'id' component name unregistered");
+
+  schema.identifierID =
+      registerComponentID(&schema.registry, idTag, sizeof(UUID7));
+  struct TagMetadata idMetadata = {0};
+  idMetadata.tagID = schema.identifierID;
+  idMetadata.type = SCHEMA_TYPE_UUID;
+  idMetadata.name = idTag;
+  idMetadata.isRequired = false;
+  idMetadata.alias = createUmbraStringNull();
+  idMetadata.defaultValue = createUmbraStringNull();
+  addRegisteredTag(&schema, &idMetadata);
 
   struct JsonNode *root = jsonReadFile(&p, &allocator);
 

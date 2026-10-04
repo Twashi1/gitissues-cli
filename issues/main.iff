@@ -1,10 +1,11 @@
-String lifetimes are ambiguous, provide functions to take string views (compatible with umbra strings, c-strings, etc.), and discern between transient and persistent strings for use in data structures
-:: @core $0 #todo created:14-09-26;
-Escaped characters are misread in IFF files :: @core #todo created:14-09-26;
+String lifetimes are ambiguous, provide functions to take string views (compatible with umbra strings, c-strings, etc.), and discern between transient and persistent strings for use in data structures :: @core $0 #todo created:14-09-26;
+Escaped characters are misread in IFF files and `jsonReadString` :: @core #todo created:14-09-26;
 Arbitrary data linking support by entity :: @core #todo created:14-09-26;
-Comments in IFF files :: @core $4 #unsure created:14-09-26;
+Enum string support :: @core #todo;
+Defining external schema properties (external structures stored outside IFF files - might require figuring out a full object definition language, something similar to protobuf) :: @core #todo;
+Comments in IFF files :: @core $4 #todo created:14-09-26;
 Validation of schema against IFF file :: @cli $1 #todo created:14-09-26;
-Automatic field generation forom schema :: @cli $2 #todo created:14-09-26;
+Automatic field generation form schema :: @cli $2 #todo created:14-09-26;
 Merging of IFF files :: @cli $3 #todo created:14-09-26;
 Get list of all issues stored in a file :: @bindings #todo created:15-09-26;
 Save an entire list of issues to a file :: @bindings #todo created:15-09-26;
@@ -12,3 +13,11 @@ Rename freeTransient, transientAllocate, lifetimeAllocate to specify they are gl
 Performing many loads/saves of IFF files will cause global memory leak, related to lifetime of umbra strings :: @core #todo created:15-09-26;
 Getting the size of a tag function, ideally in API too :: @core #todo created:16-09-26;
 Testing deserialisation of registry :: @tests #todo created:20-09-26;
+Generation of unique IDs for issues, these IDs are dependent on the name of the file :: @core #todo;
+Better logging tool, filter-able on severity and section of code :: @core #todo;
+Fix weird stack of testing suite API, should just be post test result :: @tests #todo;
+Write JNI tests for GitIssues :: @tests #todo;
+UUID7 ID generation for linking to external registry data :: @core #todo;
+Better testing framework for C library, look at https://cmocka.org/ :: @tests #todo;
+Separation of the schema and the store, schema should just describe the data format, but currently additionally stores the registry :: @refactor #todo;
+Expose methods for getting the tag id by tag name :: @api #todo;

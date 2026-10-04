@@ -2,9 +2,11 @@
 #include "gitissues/defines.h"
 #include "gitissues/ecs/registry.h"
 #include "gitissues/ecs/string_map.h"
+#include "gitissues/global.h"
 #include "gitissues/iff/schema.h"
 #include "gitissues/umbra_string.h"
 #include <gitissues/iff/iff.h>
+#include <gitissues/uuid.h>
 
 #include <ctype.h>
 #include <inttypes.h>
@@ -224,6 +226,58 @@ static bool readIFFInt(char const *fileContentPtr, uint32_t *pos,
   return true;
 }
 
+static bool readIFFUUID(char const *fileContentPtr, uint32_t *pos,
+                        struct Issue issue, struct Registry *registry,
+                        struct TagMetadata *tagMeta,
+                        struct UmbraString const tagString) {
+  UUID7 uuid;
+  char const *p = fileContentPtr + *pos;
+
+  // UUID is 36 characters: 32 hex digits + 4 dashes.
+  for (int i = 0; i < 36; i++) {
+    if (p[i] == '\0') {
+      return false;
+    }
+
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (p[i] != '-') {
+        return false;
+      }
+    } else if (!isxdigit((unsigned char)p[i])) {
+      return false;
+    }
+  }
+
+  // Convert the 32 hex digits into 16 bytes.
+  int byteIndex = 0;
+
+  for (int i = 0; i < 36;) {
+    if (p[i] == '-') {
+      i++;
+      continue;
+    }
+
+    int hi = isdigit((unsigned char)p[i])
+                 ? p[i] - '0'
+                 : tolower((unsigned char)p[i]) - 'a' + 10;
+
+    int lo = isdigit((unsigned char)p[i + 1])
+                 ? p[i + 1] - '0'
+                 : tolower((unsigned char)p[i + 1]) - 'a' + 10;
+
+    uuid.bytes[byteIndex++] = (uint8_t)((hi << 4) | lo);
+    i += 2;
+  }
+
+  *pos += 36;
+
+  completeTagMetadataIfInvalid(registry, tagString, tagMeta, SCHEMA_TYPE_UUID);
+
+  addTagById(registry, issue, tagMeta->tagID, uuid.bytes);
+
+  return true;
+}
+
 static bool readIFFFloat(char const *fileContentPtr, uint32_t *pos,
                          struct Issue issue, struct Registry *registry,
                          struct TagMetadata *tagMeta,
@@ -398,6 +452,9 @@ static void readIFFValue(char const *fileContentPtr, uint32_t *pos,
     if (readIFFFloat(fileContentPtr, pos, issue, &schema->registry, tagMeta,
                      tagString))
       return;
+    if (readIFFUUID(fileContentPtr, pos, issue, &schema->registry, tagMeta,
+                    tagString))
+      return;
   }
 
   if (isdigit(fileContentPtr[*pos])) {
@@ -409,9 +466,20 @@ static void readIFFValue(char const *fileContentPtr, uint32_t *pos,
     if (readIFFBoolean(fileContentPtr, pos, issue, &schema->registry, tagMeta,
                        tagString))
       return;
+
+    if (fileContentPtr[*pos] == 'f' &&
+        readIFFUUID(fileContentPtr, pos, issue, &schema->registry, tagMeta,
+                    tagString))
+      return;
   }
 
   // TODO: Empty?
+  // Could still be a UUID starting with hex digit
+  if (isxdigit(fileContentPtr[*pos]) &&
+      readIFFUUID(fileContentPtr, pos, issue, &schema->registry, tagMeta,
+                  tagString)) {
+    return;
+  }
 
   readIFFUnquotedString(fileContentPtr, pos, allocator, issue, schema, tagMeta,
                         tagString);
@@ -673,6 +741,35 @@ void readIFFFile(char const *filename, struct BlockAllocator *allocator,
 
     lastIssueEnd = terminatorIndex;
 
+    // Final validation: checking against schema, checking if all required tags
+    // specified/can be filled with default.
+    // TODO: implementation of above
+    // TODO: this is highly expensive check, can optimise by only checking count
+    // of required -- faster expected case
+    // for (uint32_t i = 0; i < schema->tagMeta.capacity; i++) {
+    //   struct TagMetadata const *tagMeta = &schema->tagMeta.data[i];
+    //
+    //   if (tagMeta->tagID == _GITISSUES_COMPONENT_INVALID) {
+    //     continue;
+    //   }
+    //
+    //   if (schema->tagMeta.data[i].isRequired) {
+    //     bool tagPresent =
+    //         hasComponent(&schema->registry, issue.entity, tagMeta->tagID);
+    //
+    //     // TODO: if default value is not null, fill it in
+    //
+    //     NDEBUG_ASSERT(tagPresent, "Required tag was not present");
+    //   }
+    // }
+    // Check for presence of ID tag, and fill in
+    if (!hasComponent(&schema->registry, issue.entity, schema->identifierID)) {
+      UUID7 issueID;
+      UUID7Generate(&schema->rng, &issueID);
+      addTagById(&schema->registry, issue, schema->identifierID,
+                 (uint8_t *)&issueID);
+    }
+
     ARRAY_APPEND(issueArray, issue, ARRAY_GROWTH_ONE_HALF);
   }
 
@@ -711,6 +808,15 @@ static void writeIFFDate(FILE *p, struct SchemaDate const *date) {
   fprintf(p, "%02d-%02d-%04d", date->day, date->month, date->year);
 }
 
+static void writeIFFUUID(FILE *p, UUID7 const *id) {
+  const unsigned char *b = (const unsigned char *)id->bytes;
+
+  fprintf(
+      p, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+      b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11],
+      b[12], b[13], b[14], b[15]);
+}
+
 static void writeIFFValue(FILE *p, struct TagMetadata const *tagMeta,
                           struct Issue const issue,
                           struct Schema const *schema) {
@@ -735,11 +841,62 @@ static void writeIFFValue(FILE *p, struct TagMetadata const *tagMeta,
     writeIFFDate(p, (struct SchemaDate const *)getTagByIdConst(
                         &schema->registry, issue, tagMeta->tagID));
     break;
+  case SCHEMA_TYPE_UUID:
+    writeIFFUUID(p, (UUID7 const *)getTagByIdConst(&schema->registry, issue,
+                                                   tagMeta->tagID));
+    break;
   case SCHEMA_TYPE_EMPTY:
     // TODO: implementation
     break;
   default:
     break;
+  }
+}
+
+static void writeIssue(FILE *p, struct Issue const issue,
+                       struct Schema const *schema) {
+  DEBUG_ASSERT(
+      hasComponent(&schema->registry, issue.entity, schema->descriptionID),
+      "Issue must have description component");
+
+  struct UmbraString const *description =
+      (struct UmbraString const *)getTagByIdConst(&schema->registry, issue,
+                                                  schema->descriptionID);
+  DEBUG_ASSERT(description != NULL, "Description data must exist");
+
+  fwrite(getUmbraPtrConst(description), sizeof(char), description->size, p);
+  fwrite(getUmbraPtrConst(&schema->separator), sizeof(char),
+         schema->separator.size, p);
+
+  bool isFirstTag = true;
+
+  // Write tag list
+  for (uint32_t i = 0; i < schema->tagMeta.capacity; i++) {
+    if (schema->tagMeta.data[i].type == SCHEMA_TYPE_INVALID) {
+      continue;
+    }
+
+    if (!isFirstTag) {
+      fputc(' ', p);
+    }
+    isFirstTag = false;
+
+    struct TagMetadata const *tagMeta = &schema->tagMeta.data[i];
+    DEBUG_ASSERT(tagMeta->tagID != _GITISSUES_COMPONENT_INVALID,
+                 "Expected tag ID to be valid when serialising");
+
+    // Write alias if we have one
+    if (tagMeta->alias.size > 0) {
+      fwrite(getUmbraPtrConst(&tagMeta->alias), sizeof(char),
+             tagMeta->alias.size, p);
+    } else {
+      fwrite(getUmbraPtrConst(&tagMeta->name), sizeof(char), tagMeta->name.size,
+             p);
+      fputc(':', p);
+    }
+
+    // Write the value in now
+    writeIFFValue(p, tagMeta, issue, schema);
   }
 }
 
@@ -751,53 +908,29 @@ void writeIFFFile(char const *filename, struct Issue const *issues,
   for (uint32_t i = 0; i < issuesSize; i++) {
     struct Issue const issue = issues[i];
 
-    DEBUG_ASSERT(
-        hasComponent(&schema->registry, issue.entity, schema->descriptionID),
-        "Issue must have description component");
-
-    struct UmbraString const *description =
-        (struct UmbraString const *)getTagByIdConst(&schema->registry, issue,
-                                                    schema->descriptionID);
-    DEBUG_ASSERT(description != NULL, "Description data must exist");
-
-    fwrite(getUmbraPtrConst(description), sizeof(char), description->size, p);
-    fwrite(getUmbraPtrConst(&schema->separator), sizeof(char),
-           schema->separator.size, p);
-
-    bool isFirstTag = true;
-
-    // Write tag list
-    for (uint32_t i = 0; i < schema->tagMeta.capacity; i++) {
-      if (schema->tagMeta.data[i].type == SCHEMA_TYPE_INVALID) {
-        continue;
-      }
-
-      if (!isFirstTag) {
-        fputc(' ', p);
-      }
-      isFirstTag = false;
-
-      struct TagMetadata const *tagMeta = &schema->tagMeta.data[i];
-      DEBUG_ASSERT(tagMeta->tagID != _GITISSUES_COMPONENT_INVALID,
-                   "Expected tag ID to be valid when serialising");
-
-      // Write alias if we have one
-      if (tagMeta->alias.size > 0) {
-        fwrite(getUmbraPtrConst(&tagMeta->alias), sizeof(char),
-               tagMeta->alias.size, p);
-      } else {
-        fwrite(getUmbraPtrConst(&tagMeta->name), sizeof(char),
-               tagMeta->name.size, p);
-        fputc(':', p);
-      }
-
-      // Write the value in now
-      writeIFFValue(p, tagMeta, issue, schema);
-    }
+    writeIssue(p, issue, schema);
 
     fwrite(getUmbraPtrConst(&schema->terminator), sizeof(char),
            schema->terminator.size, p);
   }
 
   fclose(p);
+}
+
+void addToIFF(char const *filename, struct Issue const *issues,
+              uint32_t issuesSize, struct Schema const *schema) {
+  FILE *p = fopen(filename, "a");
+
+  for (uint32_t i = 0; i < issuesSize; i++) {
+    struct Issue const issue = issues[i];
+
+    writeIssue(p, issue, schema);
+  }
+
+  fclose(p);
+}
+
+bool validateIssue(struct Issue const issue, struct Schema const *schema) {
+  // TODO:
+  return true;
 }

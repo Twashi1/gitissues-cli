@@ -40,4 +40,5 @@ target_include_directories(gitissues_jni
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+# Link against the shared gitissues library
 target_link_libraries(gitissues_jni PRIVATE gitissues_lib ${JNI_LIBRARIES})

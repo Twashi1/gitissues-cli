@@ -19,5 +19,8 @@ void readIFFFile(char const *filename, struct BlockAllocator *allocator,
                  struct Schema *schema);
 void writeIFFFile(char const *filename, struct Issue const *issues,
                   uint32_t issuesSize, struct Schema const *schema);
+void addToIFF(char const *filename, struct Issue const *issues,
+              uint32_t issuesSize, struct Schema const *schema);
+bool validateIssue(struct Issue const issue, struct Schema const *schema);
 
 #endif

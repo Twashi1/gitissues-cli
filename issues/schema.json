@@ -10,11 +10,6 @@
 			"type": "string",
 			"required": true 
 		},
-    "entity": {
-      "alias": "$",
-      "type": "int64",
-      "required": false
-    },
     "status": {
       "alias": "#",
       "type": "string",

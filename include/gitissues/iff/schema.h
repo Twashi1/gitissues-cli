@@ -4,6 +4,7 @@
 #include <gitissues/ecs/registry.h>
 #include <gitissues/ecs/string_map.h>
 #include <gitissues/umbra_string.h>
+#include <gitissues/uuid.h>
 
 enum SchemaPropertyTypes {
   SCHEMA_TYPE_EMPTY,
@@ -12,6 +13,7 @@ enum SchemaPropertyTypes {
   SCHEMA_TYPE_STRING,
   SCHEMA_TYPE_DATE,
   SCHEMA_TYPE_BOOLEAN,
+  SCHEMA_TYPE_UUID,
   SCHEMA_TYPE_INVALID,
 };
 
@@ -58,6 +60,8 @@ struct Schema {
   struct Registry registry;
   uint32_t numRequiredTags;
 
+  PCG32 rng;
+
   struct {
     struct UmbraString *data;
     uint32_t size;
@@ -65,7 +69,9 @@ struct Schema {
   } aliasTagNames;
 
   ComponentID descriptionID;
+  ComponentID identifierID;
 
+  // Indexable by tag ID/component ID
   struct {
     struct TagMetadata *data;
     uint32_t size;

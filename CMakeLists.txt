@@ -30,10 +30,11 @@ set(GITISSUES_SOURCES
     src/tests/allocator.c
     src/tests/iff.c
     src/json/json.c
+    src/uuid.c
     src/api/api.c
 )
 
-add_library(gitissues_lib ${GITISSUES_SOURCES})
+add_library(gitissues_lib SHARED ${GITISSUES_SOURCES})
 
 set_target_properties(gitissues_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON

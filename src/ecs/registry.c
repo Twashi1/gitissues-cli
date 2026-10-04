@@ -55,6 +55,20 @@ Entity createEntity(struct Registry *registry) {
   return e;
 }
 
+bool isEntityNull(struct Registry *registry, Entity entity) {
+  if (entityToPos(entity) == _ECS_NULL)
+    return true;
+
+  if (entity < registry->createdEntities.size) {
+    // Version number match too
+    if (registry->createdEntities.data[entityToPos(entity)] == entity) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 void freeEntity(struct Registry *registry, Entity entity) {
   // TODO: highly inefficient
   // Iterate all component pools

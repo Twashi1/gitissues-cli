@@ -54,6 +54,7 @@ void freeRegistry(struct Registry *registry);
 
 Entity createEntity(struct Registry *registry);
 void freeEntity(struct Registry *registry, Entity entity);
+bool isEntityNull(struct Registry *registry, Entity entity);
 
 bool isRegistered(struct Registry *registry, struct UmbraString string);
 ComponentID registerComponentID(struct Registry *registry,

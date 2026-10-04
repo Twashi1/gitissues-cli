@@ -31,4 +31,8 @@ public final class GitIssues {
 
   public static native boolean hasTag(long schema, long issue, String tag);
   public static native boolean hasTagByID(long schema, long issue, long tagID);
+
+  public static native boolean isNullIssue(long schema, long issue);
+  public static native void removeIssues(long schema, List<Long> issues);
+  public static native byte[] getOrCreateUUID(long schema, long issue);
 }
